@@ -1,7 +1,14 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
- * tango_volume.c -- see tango_volume.h. Tango, our own code.
+ * tango_volume.c -- see tango_volume.h. Tango.
+ *
+ * Derived from Main_MiSTer (https://github.com/MiSTer-devel/Main_MiSTer, GPL-3.0; compared at c3dc8ed): these
+ * functions closely paraphrase its code, so this file is GPL-3.0-or-later with the whole firmware
+ * (LICENSE-GPL-3.0, NOTICE):
+ *   clamp_core              audio.cpp get_core_volume (144-152)
+ *   tango_vol_core_step     audio.cpp set_core_volume (187-227)
+ * Upstream notices: audio.cpp has no copyright or licence header (the repository's LICENSE is GPL-3.0).
  */
 #include <string.h>
 #include "tango_volume.h"

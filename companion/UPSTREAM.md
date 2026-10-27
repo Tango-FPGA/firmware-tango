@@ -1,6 +1,9 @@
 # Upstream: MiSTle-Dev/FPGA-Companion
 
 This folder is the BL616 firmware Tango forks. It is Apache-2.0; see `LICENSE`, which is upstream's own.
+Its files keep Apache-2.0, Tango's changes to them included. The firmware built from this folder together with
+`../tango/` is GPL-3.0-or-later as a whole, because `../tango/` contains code from MiSTer's Main_MiSTer (GPL-3.0); see
+`../NOTICE` and `../LICENSE-GPL-3.0`.
 
 - **Upstream:** https://github.com/MiSTle-Dev/FPGA-Companion
 - **Imported commit:** `ccb06d2`, imported unchanged, so every Tango change shows as a diff after it.

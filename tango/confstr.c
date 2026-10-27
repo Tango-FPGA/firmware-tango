@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * confstr.c -- Tango's CONF_STR parser. See confstr.h and menu-tango docs/CONF_STR.md.

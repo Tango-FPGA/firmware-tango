@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * test_mra.c -- host tests for tango_mra.c. <rbf> extraction and the core-matching

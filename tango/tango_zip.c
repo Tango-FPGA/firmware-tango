@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_zip.c -- see tango_zip.h for the format spec sections each piece of this comes from, and for why this

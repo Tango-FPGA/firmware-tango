@@ -1,6 +1,6 @@
 # firmware-tango -- the Tango BL616 firmware
 
-**Version 2026-10-25** (date code `20261025`)
+**Version 2026-10-27** (date code `20261027`)
 
 firmware-tango is the firmware of the **BL616 microcontroller** on the **Sipeed Tang Console 138K**, the board the
 Tango FPGA system runs on. It is a fork of [FPGA Companion](https://github.com/MiSTle-Dev/FPGA-Companion)
@@ -152,7 +152,7 @@ Open a core's menu, **System > About**: under `TangoFPGA.com` it shows `Tango FP
 firmware's build date and the commit it was built from) and the core's name and version. The launcher's System
 Settings shows the whole id, `Firmware g<hash> <date> <time>`. `-dirty` after the hash means the image was built from
 a tree that differed from that commit; `Tango FPGA (build unknown)` means it was built without `build.sh`. The release
-image's id is `g<the release commit> 2026-10-25 12:00`.
+image's id is `g<the release commit> 2026-10-27 12:00`.
 
 ## Building from source
 
@@ -198,7 +198,7 @@ directories away (`-ffile-prefix-map`, `companion/src/bl616/CMakeLists.txt`). Bu
 commit in different folders, with different build trees, the image came out byte-identical. The release image was
 built so, from this repository's commit, with the SDK, toolchain and FPGA Companion commits above:
 
-    SOURCE_DATE_EPOCH=$(date -u -d '2026-10-25 12:00' +%s) ./build.sh console138k clean
+    SOURCE_DATE_EPOCH=$(date -u -d '2026-10-27 12:00' +%s) ./build.sh console138k clean
 
 Prebuilt libraries inside the SDK keep their own version strings.
 
@@ -226,6 +226,7 @@ arcade DIP and upload tests. Not part of `make`, or not in this repository:
 
 | Path | What |
 |---|---|
+| `LICENSE-GPL-3.0`, `NOTICE` | the licence of the firmware as a whole (GPL-3.0-or-later) and its notice: the Main_MiSTer code per file, the MiSTer test data, the FPGA Companion and the other third-party parts (see [Licence](#licence)) |
 | `build.sh`, `mk_fwid.sh` | the build and the firmware id |
 | `companion/` | the FPGA Companion fork: upstream's tree at `ccb06d2` with Tango's changes (marked `Tango` / `TANGO` in the code and `Modified for Tango` in each changed file's header), upstream's documentation (`README.md`, `SPI.md`, `DEBUGGING.md`, `NETWORKING.md`, `src/bl616/README.md`) and `UPSTREAM.md` |
 | `companion/src/bl616/` | the BL616 port (`mcu_hw.c`, `CMakeLists.txt`); upstream's other ports (`src/rp2040`, `src/esp32`) are kept unchanged |
@@ -241,6 +242,9 @@ upstream's top-level `.gitmodules` (kept as `companion/gitmodules.upstream`).
 
 | Component | Where | Author | Licence |
 |---|---|---|---|
+| **Main_MiSTer** (code copied or closely paraphrased) | `tango/tango_browser.c`, `tango_padmap.c`, `tango_volume.c`, `tango_vproc.c`, `tango_coremenu.c`, `tango/test/vproc_stream.c`; `NOTICE` lists each function and the upstream lines | MiSTer-devel; menu.cpp: "Copyright 2005, 2006, 2007 Dennis van Weeren", "Copyright 2008, 2009 Jakub Bednarski"; cfg.cpp: "2015, rok.krajnc@gmail.com", "2017+, Sorgelig" | GPL-3.0 |
+| **Template_MiSTer** CONF_STR (test data) | `tango/test/test_confstr.c` (`TEMPLATE`), `tango/test/test_tango.c` (`TEMPLATE_CONF`) | MiSTer-devel | GPL-2.0-or-later |
+| **Menu_MiSTer** CONF_STR (test data) | `tango/test/test_confstr.c` (`MENU`) | "Copyright (C) 2017-2020 Sorgelig" | GPL-2.0-or-later |
 | **FPGA Companion** | `companion/` (the fork base, upstream `ccb06d2`) | MiSTle-Dev (Till Harbaum and contributors) | Apache-2.0 (`companion/LICENSE`) |
 | **Bouffalo SDK** (MiSTle-Dev's `bouffalo_sdk`) | build dependency, compiled in (drivers, FreeRTOS port, CherryUSB, lwIP, FatFs, mbedTLS, ...) | Bouffalo Lab, MiSTle-Dev | Apache-2.0 (its `LICENSE`); its bundled components keep their own licences |
 | **FreeRTOS** | in the SDK | Amazon.com, Inc. or its affiliates | MIT |
@@ -253,26 +257,39 @@ upstream's top-level `.gitmodules` (kept as `companion/gitmodules.upstream`).
 | **puff** (inflate) | `companion/src/puff.c`, `puff.h` | Mark Adler | zlib licence (`puff.h`) |
 | **SDL_GameControllerDB** | `companion/src/usb_controller_maps.h` (generated from it by `generate_usb_controller_maps.py`), the built-in pad table | Sam Lantinga and contributors | zlib |
 | **miniz** (decompressor only) | `tango/third_party/miniz/` (upstream `4987e1a4`) | Rich Geldreich, RAD Game Tools and Valve Software | MIT (`tango/third_party/miniz/LICENSE`) |
-| **Saira Condensed** SemiBold (the menu font) | rasterised glyphs in `tango/tango_font_data.c` | The Saira Project Authors | SIL Open Font License 1.1 (`tango/third_party/saira/OFL.txt`); reserved font name "Saira" |
+| **Saira Condensed** SemiBold (the menu font) | rasterised glyphs in `tango/tango_font_data.c` | The Saira Project Authors | SIL Open Font License 1.1 (`tango/third_party/saira/OFL.txt`); reserved font name "Saira"; the file is `GPL-3.0-or-later AND OFL-1.1` |
 | **Xuantie GCC** runtime and newlib | linked into the image | T-Head, the GNU project, the newlib authors | GCC runtime library exception; newlib's BSD-style licences |
 | **FPGA Partner** firmware | not included (see [Installing](#installing)) | Sipeed | closed binary, no licence stated |
 
-**Behaviour read and reimplemented (no code copied):** the launcher, the in-core menu, the saves, the settings files,
-the controller database lookup, the button maps, `.mra` loading and the video and audio processing follow MiSTer's
-behaviour ([MiSTer-devel/Main_MiSTer](https://github.com/MiSTer-devel/Main_MiSTer): pages, keys, file names and
-formats); each Tango file cites the MiSTer source lines it was written from. The only MiSTer text in this repository is
-test data: `tango/test/test_confstr.c` checks the CONF_STR parser against the menu strings of Template_MiSTer
-(`Template.sv`) and Menu_MiSTer (`menu.sv`), copied as strings. The `.zip` reader follows PKWARE's
-APPNOTE, the HID parser the USB HID 1.11 specification, the md5 RFC 1321.
+**MiSTer code in this firmware:** parts of the file browser, the button mapping, the core volume, the video and
+audio processing file parsers, the arcade DIP switch page and the shadow-mask mode names are copied or closely
+paraphrased from
+[MiSTer-devel/Main_MiSTer](https://github.com/MiSTer-devel/Main_MiSTer) (compared at `c3dc8ed`), in the six files
+named above; `NOTICE` lists each function with the Main_MiSTer file and lines it comes from, and each of those files
+says so in its header. The rest of the launcher, the in-core menu, the saves, the settings files, the controller
+database lookup and `.mra` loading follow MiSTer's behaviour (pages, keys, file names and formats) and cite the
+Main_MiSTer lines they were read from. The tests contain MiSTer text as data, copied as strings:
+`tango/test/test_confstr.c` checks the CONF_STR parser against the menu strings of Template_MiSTer (`Template.sv`) and
+Menu_MiSTer (`menu.sv`), and `tango/test/test_tango.c` the in-core menu against Template_MiSTer's. The `.zip` reader
+follows PKWARE's APPNOTE, the HID parser the USB HID 1.11 specification, the md5 RFC 1321.
 
 ## Licence
 
-**Apache License 2.0** (`companion/LICENSE`). FPGA Companion is Apache-2.0; the code written for Tango (`tango/`
-outside `third_party/`, `build.sh`, `mk_fwid.sh`) is Apache-2.0 too, `Copyright (c) 2026 the Tango authors`, as each
-file's `SPDX-License-Identifier: Apache-2.0` header says; the FPGA Companion files Tango changed say so in their
-headers ("Modified for Tango, 2026 ... Apache-2.0 as the original").
+**GNU General Public License, version 3 or (at your option) any later version** (GPL-3.0-or-later;
+`LICENSE-GPL-3.0`), for the firmware as a whole, because it contains code from MiSTer's Main_MiSTer, which is GPL-3.0
+(see [Attributions](#attributions) and `NOTICE`).
 
-Except these third-party parts, which keep their own licences (their notices are in the files):
+- **The code written for Tango** (`tango/` outside `third_party/`, `build.sh`, `mk_fwid.sh`) is GPL-3.0-or-later,
+  `Copyright (c) 2026 the Tango authors`, as each file's `SPDX-License-Identifier: GPL-3.0-or-later` header says;
+  `tango/tango_font_data.c` is `GPL-3.0-or-later AND OFL-1.1` (its glyph bitmaps stay under the font's licence).
+- **The FPGA Companion files** (`companion/`) keep the **Apache License 2.0** (`companion/LICENSE`, upstream's own),
+  Tango's changes to them included: the files Tango changed say so in their headers ("Modified for Tango, 2026 ...
+  Apache-2.0 as the original"). Apache-2.0 code may be part of a GPL-3.0 work; the combined firmware is distributed
+  under GPL-3.0-or-later.
+- **The MiSTer test data** (the Template_MiSTer and Menu_MiSTer CONF_STR strings in `tango/test/`) is
+  GPL-2.0-or-later, as its upstream headers state.
+
+These third-party parts keep their own licences (their notices are in the files):
 
 | Files | Licence |
 |---|---|

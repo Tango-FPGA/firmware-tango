@@ -1,9 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_volume.h -- MiSTer's Core Volume and Global Volume as a portable state machine (no I/O).
  *
- * Tango. Our own code, written from MiSTer's behaviour (Main_MiSTer master c3dc8ed, audio.cpp):
+ * Tango. Parts of tango_volume.c closely paraphrase Main_MiSTer (GPL-3.0); its header lists them.
+ * GPL-3.0-or-later with the whole firmware (NOTICE). The rules, from Main_MiSTer master c3dc8ed, audio.cpp:
  *   audio.cpp 24-31, 108-137   send_volume: with no audio filter in the core the one byte of UIO_AUDVOL is the global
  *                              attenuation plus the core attenuation (the sum is held at 7 and the clamp is written back
  *                              into the global one); with the filter the core volume travels as the first byte of

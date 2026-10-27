@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_padres.h -- the LOOKUP LADDER: from "a pad was plugged in" to a decode table, with a real fallback at every step.

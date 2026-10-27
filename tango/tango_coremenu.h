@@ -1,9 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_coremenu.h -- the in-core OSD: MiSTer's menu for a running core, built from its CONF_STR.
  *
- * Tango. Our own code, written from MiSTer's behaviour (Main_MiSTer master):
+ * Tango. Parts of tango_coremenu.c follow or copy Main_MiSTer (GPL-3.0); its header lists them, with
+ * the upstream notices. GPL-3.0-or-later with the whole firmware (NOTICE). The rules, from Main_MiSTer master:
  *   menu.cpp 1905-2240   MENU_GENERIC_MAIN1/2: page 0 = the core's CONF_STR entries from entry 2 on;
  *                        H/h/D/d hide/grey by status_menumask bit (UIO_GET_OSDMASK); P#,Title = a sub-page
  *                        link on page 0; P# prefix = the entry lives on page #; O/o option "Name" + value;

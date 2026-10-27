@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * test_tango.c -- host tests for the Tango launcher firmware modules (layout, protocol, browser, launcher).
- * Tango, our own code.
+ * Tango; the Template_MiSTer CONF_STR test data is marked where it is defined (NOTICE).
  *
  *   ./test_tango <streams-dir> <layout-dir>
  * Writes the SPI streams the FPGA testbench plays (<streams-dir>/s*.bin) and layout dumps
@@ -715,7 +715,9 @@ static void test_settings(const char *dir)
 }
 
 /* ---------------------------------------------------------------- the in-core OSD (tango_coremenu) */
-/* MiSTer-devel/Template_MiSTer Template.sv 58-86 (the same string as test_confstr.c) */
+/* MiSTer-devel/Template_MiSTer Template.sv 58-86 (the same string as test_confstr.c): test data copied as text,
+ * GPL-2.0-or-later as Template.sv's header states (NOTICE).  TANGO_TEMPLATE_CONF below carries the same page 1 / page 2
+ * entries, as the Tango Template core's CONF_STR does */
 static const char *TEMPLATE_CONF =
     "Template;;-;O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];O[2],TV Mode,NTSC,PAL;"
     "O[4:3],Noise,White,Red,Green,Blue;-;P1,Test Page 1;P1-;P1-, -= Options in page 1 =-;P1-;"

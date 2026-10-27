@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2026 the Tango authors
 # Host unit tests for the Tango firmware modules (no SDK needed).
 #   make            build + run everything: confstr tests, the launcher tests (which record the SPI streams

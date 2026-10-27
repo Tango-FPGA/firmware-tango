@@ -1,9 +1,11 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_padmap.h -- MiSTer's "Define <core> buttons" and the core pad map, for Tango.
  *
- * Tango. Our own code, written from MiSTer's behaviour (Main_MiSTer master 5a3a086):
+ * Tango. Parts of tango_padmap.c are copied or closely paraphrased from Main_MiSTer (GPL-3.0); its
+ * header lists them, with the upstream notices. GPL-3.0-or-later with the whole firmware (NOTICE).
+ * The rules, from Main_MiSTer master 5a3a086:
  *   menu.cpp 2998-3019      System row 2: parse_buttons(), start_map_setting(joy_bcount ? joy_bcount + 4 : 8)
  *   menu.cpp 4188-4431      MENU_JOYDIGMAP..4: title "Define buttons"; row 3 "Press: <name>" (RIGHT LEFT DOWN UP,
  *                           then the core's J names, or BUTTON A/B/X/Y without them: joy_button_map, menu.cpp 267);

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /* real_kernel_pads.h -- REAL HID report descriptors of game controllers found as constant arrays inside the Linux HID driver modules of a Linux PC (6.8.0-147-generic), by
  * menu-tango tools/extract_kernel_rdescs.py.  14 distinct descriptors.  Provenance per entry: module and byte offset of the decompressed .ko.  FIXTURES: no firmware code is keyed on them. */

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /* fake_zip_fixtures.h -- generated test fixtures: real, standards-compliant .zip byte streams (built with
  * Python's zipfile module) plus their expected decompressed content, for test_zip.c's host tests.

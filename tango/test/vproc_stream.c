@@ -1,9 +1,11 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * vproc_stream.c -- the BL616 firmware's video/audio processing transfers (tango_vproc.c) for one set of settings,
  * written as a link stream: the same command line as sys-tango build_tools/vproc_preset.py --stream, so the two
- * implementations can be compared byte for byte (vproc_crosscheck.py). Tango, our own code.
+ * implementations can be compared byte for byte (vproc_crosscheck.py). Tango.
+ * The shadow-mask mode names (MM below) are Main_MiSTer's menu.cpp config_smask_msg (273, c3dc8ed; GPL-3.0; the header
+ * of menu.cpp reads "Copyright 2005, 2006, 2007 Dennis van Weeren", "Copyright 2008, 2009 Jakub Bednarski"), lower case.
  *   vproc_stream --root <filters folder> [--preset <ini>] [--hfilter f] [--vfilter f] [--sfilter f] [--ifilter f]
  *                [--gamma f] [--mask f] [--maskmode m] [--afilter f] [--scanlines n] --stream <out.bin>
  * The card: <root> holds the filter files' subtrees (Filters_MiSTer/Filters, ...), or a make_sd_tree.sh layout.

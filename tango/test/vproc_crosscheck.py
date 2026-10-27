@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2026 the Tango authors
 """vproc_crosscheck.py -- the firmware's video/audio processing transfers (bl616/tango/tango_vproc.c, through the host
 tool vproc_stream) against sys-tango's build_tools/vproc_preset.py, byte for byte, for every file of a folder of MiSTer's filter files:

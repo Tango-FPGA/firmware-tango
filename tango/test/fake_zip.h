@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * fake_zip.h -- a tango_zipfs_t over an in-memory buffer (a real .zip file's bytes), for host tests.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /* real_pads.h -- REAL USB descriptors of pads read from a Linux PC WITHOUT root: the device + configuration descriptors from
  * /sys/bus/usb/devices/<port>/descriptors (the bytes the device sent), the HID report descriptor from the hidraw device's sysfs report_descriptor.

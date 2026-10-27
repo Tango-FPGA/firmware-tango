@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2026 the Tango authors
 # check_fwid.sh -- mk_fwid.sh makes the firmware build id that System > About shows (tango_about.h, as "Tango FPGA
 # v<yymmdd> (g<hash>)"; the launcher's System Settings: "Firmware <id>"). Checks its format (the shape tango_about_version

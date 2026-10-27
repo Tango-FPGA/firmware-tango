@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2026 the Tango authors
 # mk_fwid.sh -- prints tango_fwid.h, the firmware's build id, for build.sh to put next to tango_fw.c in its scratch
 # build tree (never into the source tree). One line:

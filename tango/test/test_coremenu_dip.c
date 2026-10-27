@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * test_coremenu_dip.c -- host tests for the TANGO_CM_DIP page (tango_coremenu.c:

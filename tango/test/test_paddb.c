@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * test_paddb.c -- host tests for the controller database: HID descriptor parser, SDL lines, lookup ladder, decode tables.

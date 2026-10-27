@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_kbd.h -- a USB boot keyboard (HID KBD_REPORT) as MiSTer uses one: the menu's keys, and PS/2 for the core.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /* real_descriptors.h -- REAL HID report descriptors, dumped from a Linux PC (sysfs hid devices, file report_descriptor); nothing synthetic.
  * Keyboards, mice and vendor interfaces: none of them is a gamepad, so they test that the pad manager resolves them QUIET. */

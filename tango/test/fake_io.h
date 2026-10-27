@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * fake_io.h -- host-test stand-ins for the BL616's SPI link and SD card. Tango, our own code.

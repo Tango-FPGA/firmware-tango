@@ -1,10 +1,12 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_vproc.h -- MiSTer's video and audio processing on the BL616: the scaler filters, gamma, shadow masks, the
  * audio filter and video presets, from the card's files to the framework's link commands.
  *
- * Tango. Our own code, written from MiSTer's behaviour (Main_MiSTer master;
+ * Tango. Parts of tango_vproc.c are copied or closely paraphrased from Main_MiSTer (GPL-3.0); its
+ * header lists them, with the upstream notices. GPL-3.0-or-later with the whole firmware (NOTICE).
+ * The rules, from Main_MiSTer master (
  * cited per function in tango_vproc.c): video.cpp 318-1125 (filters, gamma, masks, presets), audio.cpp 23-108,
  * 190-219 (audio filter), cfg.cpp 100-142 + 157-260 + 350-450 (MiSTer.ini keys and parsing), file_io.cpp
  * 2144-2193 (text files). FPGA side and wire format: the SYS commands 0x2A 0x2B 0x32 0x33 0x39 0x3E;

@@ -1,7 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /* Host unit tests for confstr.c. Strings are the real ones read from source:
- * MiSTer-devel/Template_MiSTer Template.sv 58-86 and MiSTer-devel/Menu_MiSTer menu.sv 58-63. */
+ * MiSTer-devel/Template_MiSTer Template.sv 58-86 and MiSTer-devel/Menu_MiSTer menu.sv 60-64 (at fa83dc1).
+ * Test data copied as text: TEMPLATE is Template_MiSTer's CONF_STR (GPL-2.0-or-later, as Template.sv's header states;
+ * the header names no author), MENU is Menu_MiSTer's (see NOTICE). This file is GPL-3.0-or-later with the whole
+ * firmware (LICENSE-GPL-3.0). */
 #include <stdio.h>
 #include <string.h>
 #include "../confstr.h"

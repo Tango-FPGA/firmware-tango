@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_paddec.h -- the pad DECODE TABLE: the contract between the BL616 (which knows pads) and the FPGA (which applies the

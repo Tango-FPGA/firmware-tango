@@ -1,8 +1,25 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_browser.c -- see tango_browser.h for the MiSTer source lines each rule comes from.
- * Tango, our own code.
+ * Tango.
+ *
+ * Derived from Main_MiSTer (https://github.com/MiSTer-devel/Main_MiSTer, GPL-3.0; compared at c3dc8ed): these
+ * functions copy or closely paraphrase its code, so this file is GPL-3.0-or-later with the whole firmware
+ * (LICENSE-GPL-3.0, NOTICE):
+ *   tango_ext_match         file_io.cpp ScanDirectory, the extension test (1793-1820; lines copied)
+ *   tango_ext_idx           user_io.cpp user_io_ext_idx (4562-4601; lines copied)
+ *   tango_browser_chdir     menu.cpp changeDir (394-434; partly verbatim), with ScanDirectory SCANF_SET_ITEM
+ *                           (file_io.cpp 1931-1952) as its loop
+ *   tango_dirent_less       file_io.cpp DirentComp (1348-1386)
+ *   tango_display_name      file_io.cpp get_display_name (from 1422)
+ *   tango_is_core_file      file_io.cpp ScanDirectory, the skip rules for files (1758-1772)
+ *   tango_browser_type      file_io.cpp ScanDirectory, the key-jump branch (2023-2057)
+ *   tango_browser_next_char, tango_browser_prev_char
+ *                           file_io.cpp ScanDirectory SCANF_NEXT_CHAR, SCANF_PREV_CHAR (1953-2022)
+ * Upstream notices: menu.cpp's header reads "Copyright 2005, 2006, 2007 Dennis van Weeren" and "Copyright 2008, 2009
+ * Jakub Bednarski" (GPL version 3 or later); file_io.cpp and user_io.cpp have no copyright or licence header (the
+ * repository's LICENSE is GPL-3.0).
  */
 #include <string.h>
 #include <stdio.h>

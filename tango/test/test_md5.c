@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * test_md5.c -- tango_md5.c against RFC 1321 Appendix A.5's own published test suite, verbatim, plus

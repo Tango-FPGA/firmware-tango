@@ -1,8 +1,19 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
- * tango_vproc.c -- see tango_vproc.h. Tango, our own code; every rule cites the Main_MiSTer line it
- * was read from (master). No Main_MiSTer code is copied.
+ * tango_vproc.c -- see tango_vproc.h. Tango; every rule cites the Main_MiSTer line it was read from
+ * (master).
+ *
+ * Derived from Main_MiSTer (https://github.com/MiSTer-devel/Main_MiSTer, GPL-3.0; compared at c3dc8ed): these
+ * parts copy or closely paraphrase its code, so this file is GPL-3.0-or-later with the whole firmware
+ * (LICENSE-GPL-3.0, NOTICE):
+ *   vp_parse_afilter        audio.cpp setFilter (30-124)
+ *   vp_parse_mask           video.cpp setShadowMask (861-962; the parser, about 880-945, one expression verbatim)
+ *   vp_parse_ini            its line reader: cfg.cpp ini_getline (192-208)
+ *   vp_parse_filter         video.cpp read_video_filter (411-500; the order of the reads)
+ * Upstream notices: cfg.cpp's header reads "2015, rok.krajnc@gmail.com" and "2017+, Sorgelig" (no licence line);
+ * audio.cpp and video.cpp have no copyright or licence header (the repository's LICENSE is GPL-3.0).
+ *
  * No static RAM here (tango_vproc.h MEMORY): scratch is on the caller's stack (the firmware's core task, 16 KB) or in
  * the core's tango_vproc_t, files in buffers of their own while they are parsed.
  */

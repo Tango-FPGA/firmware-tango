@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * test_zip.c -- host tests for tango_zip.c: container parsing (real, standards-compliant .zip byte streams,

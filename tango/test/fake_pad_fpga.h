@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * fake_pad_fpga.h -- a C model of the new FPGA's HID block (sys-tango) for the pad-manager tests.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * afilter_seq.c -- the link transfers of an in-core OSD Audio filter sequence, made by the firmware's own code

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * padgen.h -- a PARAMETERISED, SEEDED generator of synthetic USB HID pads, for the host tests (test_padgen.c) and for the RTL bench

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * test_padgen.c -- the "any HID pad a user brings" campaign: N seeded, generated pads (padgen.h) through the REAL pad manager, the REAL capture

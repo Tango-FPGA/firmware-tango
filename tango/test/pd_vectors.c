@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * pd_vectors.c -- writes the test vectors for sys-tango's tango_pad_decode.v unit bench (sys-tango sim/pads/).

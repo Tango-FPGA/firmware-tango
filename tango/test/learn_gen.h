@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /* learn_gen.h -- idle / pressed report generators shared by test_padlearn.c and test_plsess.c: from a reference decode table T they build the report a pad would send at rest and with one input held. */
 #ifndef LEARN_GEN_H

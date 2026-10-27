@@ -1,8 +1,16 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_coremenu.c -- see tango_coremenu.h for the MiSTer source lines each rule comes from.
- * Tango, our own code.
+ * Tango.
+ *
+ * Derived from Main_MiSTer (https://github.com/MiSTer-devel/Main_MiSTer, GPL-3.0; compared at c3dc8ed): these
+ * parts follow or copy its code, so this file is GPL-3.0-or-later with the whole firmware
+ * (LICENSE-GPL-3.0, NOTICE):
+ *   build_dip               menu.cpp MENU_ARCADE_DIP1 (3510-3574; followed step by step)
+ *   SMASK_MSG               menu.cpp config_smask_msg (273; copied)
+ * Upstream notices: menu.cpp's header reads "Copyright 2005, 2006, 2007 Dennis van Weeren" and "Copyright 2008, 2009
+ * Jakub Bednarski" (GPL version 3 or later).
  */
 #include <string.h>
 #include <strings.h>

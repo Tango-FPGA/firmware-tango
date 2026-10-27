@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_menubtn.h -- the OSD (menu) button: one pad button, or two pad buttons held together, that open and close the menu.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * test_padlearn.c -- the learn engine (tango_padlearn.c) against every fixture of pad_fixtures.h.

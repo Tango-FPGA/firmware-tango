@@ -1,8 +1,21 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_padmap.c -- see tango_padmap.h for the MiSTer source lines each rule comes from.
- * Tango, our own code.
+ * Tango.
+ *
+ * Derived from Main_MiSTer (https://github.com/MiSTer-devel/Main_MiSTer, GPL-3.0; compared at c3dc8ed): these
+ * parts copy or closely paraphrase its code, so this file is GPL-3.0-or-later with the whole firmware
+ * (LICENSE-GPL-3.0, NOTICE):
+ *   is_fire                 joymapping.cpp is_fire (104-115; verbatim)
+ *   BUTTON_MAP              menu.cpp joy_button_map (267; its first 12 names)
+ *   get_btn                 input.cpp get_btn (6495-6516; its condition)
+ *   tango_pm_guess_mm       joymapping.cpp map_joystick (117-218; its name chain)
+ *   start_map, event        input.cpp start_map_setting (from 1740) and the mapping part of input_cb (from 2943)
+ *   trim, substr            joymapping.cpp trim (19-29), user_io.cpp substrcpy (517-537)
+ * Upstream notices: menu.cpp's header reads "Copyright 2005, 2006, 2007 Dennis van Weeren" and "Copyright 2008, 2009
+ * Jakub Bednarski" (GPL version 3 or later); joymapping.cpp, input.cpp and user_io.cpp have no copyright or licence
+ * header (the repository's LICENSE is GPL-3.0).
  */
 #include <string.h>
 #include <stdio.h>

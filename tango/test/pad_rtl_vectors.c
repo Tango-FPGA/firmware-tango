@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * pad_rtl_vectors.c -- the vectors for the full-chain pad bench (menu-tango fpga/sim/tb_pads.inc, run_tb_pads.sh): for one device profile of

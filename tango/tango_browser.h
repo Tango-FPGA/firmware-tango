@@ -1,9 +1,11 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_browser.h -- the launcher's Cores browser: MiSTer's file list, read from Main_MiSTer source.
  *
- * Tango. Our own code, written from MiSTer's behaviour (Main_MiSTer master):
+ * Tango. Parts of tango_browser.c are copied or closely paraphrased from Main_MiSTer (GPL-3.0); its
+ * header lists them, with the upstream notices. GPL-3.0-or-later with the whole firmware (NOTICE).
+ * The rules, from Main_MiSTer master:
  *   file_io.cpp ScanDirectory 1720-1790   what is listed with SCANO_CORES:
  *       folders only if the name starts with '_' (plus ".." below the root); "System Volume Information",
  *       dot-folders and dot-files hidden; "menu.rbf" and "menu_20*" hidden; boot.rom/bootN.rom hidden;

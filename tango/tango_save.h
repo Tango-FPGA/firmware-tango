@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 the Tango authors
 /*
  * tango_save.h -- MiSTer's backup-RAM saves: saves/<CORE>/<rom>.sav mounted for the core's sd_rd / sd_wr.
