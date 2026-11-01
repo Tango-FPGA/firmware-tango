@@ -1,6 +1,6 @@
 # firmware-tango -- the Tango BL616 firmware
 
-**Version 2026-10-27** (date code `20261027`)
+**Version 2026-11-01** (date code `20261101`)
 
 firmware-tango is the firmware of the **BL616 microcontroller** on the **Sipeed Tang Console 138K**, the board the
 Tango FPGA system runs on. It is a fork of [FPGA Companion](https://github.com/MiSTle-Dev/FPGA-Companion)
@@ -22,7 +22,6 @@ The FPGA side is not in this repository: the framework every core is built on is
 - [The SD card](#the-sd-card)
 - [Which firmware is running](#which-firmware-is-running)
 - [Building from source](#building-from-source)
-- [Tests](#tests)
 - [Layout](#layout)
 - [Attributions](#attributions)
 - [Licence](#licence)
@@ -82,7 +81,7 @@ The BL616's flash holds two images:
 | Address | Image | From |
 |---|---|---|
 | `0x0` | the **FPGA Partner** firmware (Sipeed's). It keeps the board's USB debugger (JTAG and UART for a PC) working and starts the firmware at `0x40000`. | not in this repository: [FPGA Companion](https://github.com/MiSTle-Dev/FPGA-Companion), `src/bl616/bl616_fpga_partner/bl616_fpga_partner_Console.bin` (110,992 bytes, sha256 `38e45f62965548c3e0efbf1048f48d28f45bb06b746a589ccba0ce7c801d6190`; FPGA Companion release v1.4.29's `bl616_fpga_partner_console60k.bin` is the same file) |
-| `0x40000` | **firmware-tango** | the release's `firmware-tango_console138k.bin`, or your own build |
+| `0x40000` | **firmware-tango** | the release's `firmware-tango_20261101.bin` (attached to the GitHub Release, and the same file in this repository's `releases/` folder), or your own build |
 
 If `0x0` already holds this FPGA Partner image (the sha256 above), only `0x40000` needs writing.
 
@@ -111,10 +110,11 @@ builds for Linux, macOS and Windows). Put the images beside a configuration file
     address = 0x0
 
     [custom]
-    filedir = ./firmware-tango_console138k.bin
+    filedir = ./firmware-tango_20261101.bin
     address = 0x40000
 
-(To write only the firmware, leave out the `[official]` section.) Then, with the port the PC gave the board:
+(`filedir` names the firmware file you downloaded; to write only the firmware, leave out the `[official]` section.)
+Then, with the port the PC gave the board:
 
     BLFlashCommand-ubuntu --interface=uart --baudrate=2000000 --port=/dev/ttyACM0 --chipname=bl616 --cpu_id= \
         --config=flash_console138k.ini
@@ -127,8 +127,8 @@ other USB-C port (or a power supply) to boot from the SD card.
 
 ## The SD card
 
-A FAT32 card (the firmware's FatFs is built without exFAT). MiSTer's layout, with Tango's file names for the FPGA
-images:
+A FAT32 card. The firmware's FatFs is built with exFAT support, but it has not been tested with an exFAT card: use
+FAT32. MiSTer's layout, with Tango's file names for the FPGA images:
 
 | Path | What |
 |---|---|
@@ -138,10 +138,23 @@ images:
 | `/games/mame/`, `/_Arcade/mame/` | the ROM zip files the `.mra` files name |
 | `/games/<core name>/` | a core's files; its file browser starts here (else at the card's root) |
 | `/saves/<core name>/` | backup-RAM saves (`<rom>.sav`) |
-| `/config/` | written by the firmware: `<CORE>.CFG` (the option word, on Save settings), `<core>_scaler.cfg`, `_gamma.cfg`, `_shmask.cfg`, `_afilter.cfg`, `_volume.cfg`, `inputs/` (button maps, `*_input_<vid>_<pid>_v3.map`) |
+| `/config/` | written by the firmware: `<CORE>.CFG` (the option word, on Save settings), `<core>_scaler.cfg`, `_gamma.cfg`, `_shmask.cfg`, `_afilter.cfg`, `_volume.cfg`, `inputs/` (button maps, `*_input_<vid>_<pid>_v3.map`), `dips/` and `nvram/` (an arcade game's DIP settings, `<game>.dip`, and its NVRAM, `<game>.nvm`, named after its `.mra`) |
 | `/linux/gamecontrollerdb/` | `gamecontrollerdb.txt` (SDL_GameControllerDB) and `gamecontrollerdb_user.txt` (your own lines, written by Define buttons) |
 | `/Filters/`, `/Gamma/`, `/Shadow_Masks/`, `/Filters_Audio/`, `/Presets/` | MiSTer's video and audio processing files |
-| `/Tango.ini` | optional: MiSTer.ini's processing keys (`VFILTER_DEFAULT=` ...), in `[MiSTer]` or a section named after the core |
+| `/Tango.ini` | optional: MiSTer.ini's processing keys (`VFILTER_DEFAULT=` ...), in `[MiSTer]`, `[Tango]` or a section named after the core (below) |
+
+**`Tango.ini`** is read like MiSTer.ini (its first 8191 bytes; `;` starts a comment). Only the lines in a section
+that applies to the running core count; a section applies when its name, in any mix of upper and lower case, is:
+
+- `MiSTer` or `Tango` (every core),
+- the core's name (the first entry of its `CONF_STR`; the launcher's is `MENU`),
+- or a name with a `*`: every core whose name starts with the text before the first `*` (`[*]` applies to every core;
+  the text after the `*` is ignored).
+
+Lines before the first section do not count. A key given more than once takes the last value read. The keys:
+`VFILTER_DEFAULT`, `VFILTER_VERTICAL_DEFAULT`, `VFILTER_SCANLINES_DEFAULT`, `VFILTER_INTERLACE_DEFAULT`,
+`SHMASK_DEFAULT`, `SHMASK_MODE_DEFAULT`, `AFILTER_DEFAULT`, `PRESET_DEFAULT`, `VSYNC_ADJUST`, `REFRESH_MIN` and
+`REFRESH_MAX`.
 
 The firmware itself is not on the card: it lives in the BL616's flash. While it restarts into a core, it keeps the
 request in a small file, `/menu.req`.
@@ -152,7 +165,8 @@ Open a core's menu, **System > About**: under `TangoFPGA.com` it shows `Tango FP
 firmware's build date and the commit it was built from) and the core's name and version. The launcher's System
 Settings shows the whole id, `Firmware g<hash> <date> <time>`. `-dirty` after the hash means the image was built from
 a tree that differed from that commit; `Tango FPGA (build unknown)` means it was built without `build.sh`. The release
-image's id is `g<the release commit> 2026-10-27 12:00`.
+image's id is `g<hash> 2026-11-01 12:00`, the hash of the commit it was built from: the release's source commit, the one
+before the commit that adds the image under `releases/`.
 
 ## Building from source
 
@@ -186,7 +200,7 @@ The build never writes into this repository. It copies `companion/` (the fork) a
 the three submodules from the FPGA Companion clone, writes the firmware id (`mk_fwid.sh`: `g<commit>[-dirty] <date>
 <time>`), and runs the SDK's recipe. The image is
 `$TANGO_BUILD_TREE/src/bl616/build/build_out/fpga_companion_bl616.bin` -- the file to write at `0x40000` (the release
-names it `firmware-tango_console138k.bin`). Two checks fail the build:
+names it `firmware-tango_<datecode>.bin`). Two checks fail the build:
 
 - **Firmware id:** the image must contain the id just generated (a stale object cannot ship an old id).
 - **RAM:** every FreeRTOS task stack comes from the heap; the OCRAM heap that static RAM leaves must be at least
@@ -196,42 +210,24 @@ names it `firmware-tango_console138k.bin`). Two checks fail the build:
 `__DATE__` / `__TIME__` to it (in UTC), `mk_fwid.sh` pins the id's date, and every compile maps the build machine's
 directories away (`-ffile-prefix-map`, `companion/src/bl616/CMakeLists.txt`). Built this way from two checkouts of this
 commit in different folders, with different build trees, the image came out byte-identical. The release image was
-built so, from this repository's commit, with the SDK, toolchain and FPGA Companion commits above:
+built so, from this commit, with the SDK, toolchain and FPGA Companion commits above. The date-code tag `20261101`
+is on the next commit, which only adds the image under `releases/`, so check out the tag's parent:
 
-    SOURCE_DATE_EPOCH=$(date -u -d '2026-10-27 12:00' +%s) ./build.sh console138k clean
+    git checkout 20261101^
+    SOURCE_DATE_EPOCH=$(date -u -d '2026-11-01 12:00' +%s) ./build.sh console138k clean
 
 Prebuilt libraries inside the SDK keep their own version strings.
-
-## Tests
-
-Host unit tests of the Tango modules (no SDK, no board; a C compiler, `make`, Python 3 and `git`):
-
-    make -C tango/test
-
-This builds and runs the CONF_STR parser tests, the launcher and in-core menu tests (`test_tango`: every page, key and
-SPI transfer, recorded to `tango/test/out/`), the zip, md5 and `.mra` tests, the firmware id check (`check_fwid.sh`),
-the controller database, pad manager and button-learning tests (with real HID descriptors and generated pads), and the
-arcade DIP and upload tests. Not part of `make`, or not in this repository:
-
-- **The OSD model check** (`tango_stream_check.py`), which compares the recorded pages with the menu's Python model,
-  lives with the menu gateware in [menu-tango](https://github.com/Tango-FPGA/menu-tango); `make` here skips it.
-- **The co-simulation** of the firmware against the menu gateware (Verilator) needs the gateware and is not included.
-- `make vproc FILTERS=<folder> SYS=<sys-tango checkout>`: the video-processing transfers for every file of a folder of
-  MiSTer's filter files, checked against sys-tango's Python implementation (`build_tools/vproc_preset.py`).
-- `test_mra_real <MiSTer pack folder>` (or `MISTER_PACK`): the `.mra` loader against real `.mra` and ROM zip files;
-  it skips when they are absent.
-- `pd_vectors` and `pad_rtl_vectors` write the test vectors of the pad-decoder benches in sys-tango and menu-tango.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `LICENSE-GPL-3.0`, `NOTICE` | the licence of the firmware as a whole (GPL-3.0-or-later) and its notice: the Main_MiSTer code per file, the MiSTer test data, the FPGA Companion and the other third-party parts (see [Licence](#licence)) |
+| `LICENSE-GPL-3.0`, `NOTICE` | the licence of the firmware as a whole (GPL-3.0-or-later) and its notice: the Main_MiSTer code per file, the FPGA Companion and the other third-party parts (see [Licence](#licence)) |
 | `build.sh`, `mk_fwid.sh` | the build and the firmware id |
+| `releases/` | the release images, `firmware-tango_<datecode>.bin`, one per release: the same files as the GitHub Releases' |
 | `companion/` | the FPGA Companion fork: upstream's tree at `ccb06d2` with Tango's changes (marked `Tango` / `TANGO` in the code and `Modified for Tango` in each changed file's header), upstream's documentation (`README.md`, `SPI.md`, `DEBUGGING.md`, `NETWORKING.md`, `src/bl616/README.md`) and `UPSTREAM.md` |
 | `companion/src/bl616/` | the BL616 port (`mcu_hw.c`, `CMakeLists.txt`); upstream's other ports (`src/rp2040`, `src/esp32`) are kept unchanged |
-| `tango/` | the Tango launcher, in-core menu, controller database, saves, zip / `.mra` loading and video processing (portable C, also built on a PC by the tests) |
-| `tango/test/` | the host unit tests |
+| `tango/` | the Tango launcher, in-core menu, controller database, saves, zip / `.mra` loading and video processing (portable C) |
 | `tango/third_party/` | miniz's decompressor (`miniz/`, see its `UPSTREAM.md`) and the menu font's licence (`saira/OFL.txt`) |
 
 Not included: Sipeed's closed binaries that upstream carries (`src/bl616/bl616_fpga_partner/*.bin`,
@@ -242,9 +238,7 @@ upstream's top-level `.gitmodules` (kept as `companion/gitmodules.upstream`).
 
 | Component | Where | Author | Licence |
 |---|---|---|---|
-| **Main_MiSTer** (code copied or closely paraphrased) | `tango/tango_browser.c`, `tango_padmap.c`, `tango_volume.c`, `tango_vproc.c`, `tango_coremenu.c`, `tango/test/vproc_stream.c`; `NOTICE` lists each function and the upstream lines | MiSTer-devel; menu.cpp: "Copyright 2005, 2006, 2007 Dennis van Weeren", "Copyright 2008, 2009 Jakub Bednarski"; cfg.cpp: "2015, rok.krajnc@gmail.com", "2017+, Sorgelig" | GPL-3.0 |
-| **Template_MiSTer** CONF_STR (test data) | `tango/test/test_confstr.c` (`TEMPLATE`), `tango/test/test_tango.c` (`TEMPLATE_CONF`) | MiSTer-devel | GPL-2.0-or-later |
-| **Menu_MiSTer** CONF_STR (test data) | `tango/test/test_confstr.c` (`MENU`) | "Copyright (C) 2017-2020 Sorgelig" | GPL-2.0-or-later |
+| **Main_MiSTer** (code copied or closely paraphrased) | `tango/tango_browser.c`, `tango_padmap.c`, `tango_volume.c`, `tango_vproc.c`, `tango_coremenu.c`; `NOTICE` lists each function and the upstream lines | MiSTer-devel; menu.cpp: "Copyright 2005, 2006, 2007 Dennis van Weeren", "Copyright 2008, 2009 Jakub Bednarski"; cfg.cpp: "2015, rok.krajnc@gmail.com", "2017+, Sorgelig" | GPL-3.0 |
 | **FPGA Companion** | `companion/` (the fork base, upstream `ccb06d2`) | MiSTle-Dev (Till Harbaum and contributors) | Apache-2.0 (`companion/LICENSE`) |
 | **Bouffalo SDK** (MiSTle-Dev's `bouffalo_sdk`) | build dependency, compiled in (drivers, FreeRTOS port, CherryUSB, lwIP, FatFs, mbedTLS, ...) | Bouffalo Lab, MiSTle-Dev | Apache-2.0 (its `LICENSE`); its bundled components keep their own licences |
 | **FreeRTOS** | in the SDK | Amazon.com, Inc. or its affiliates | MIT |
@@ -264,14 +258,12 @@ upstream's top-level `.gitmodules` (kept as `companion/gitmodules.upstream`).
 **MiSTer code in this firmware:** parts of the file browser, the button mapping, the core volume, the video and
 audio processing file parsers, the arcade DIP switch page and the shadow-mask mode names are copied or closely
 paraphrased from
-[MiSTer-devel/Main_MiSTer](https://github.com/MiSTer-devel/Main_MiSTer) (compared at `c3dc8ed`), in the six files
+[MiSTer-devel/Main_MiSTer](https://github.com/MiSTer-devel/Main_MiSTer) (compared at `c3dc8ed`), in the five files
 named above; `NOTICE` lists each function with the Main_MiSTer file and lines it comes from, and each of those files
 says so in its header. The rest of the launcher, the in-core menu, the saves, the settings files, the controller
 database lookup and `.mra` loading follow MiSTer's behaviour (pages, keys, file names and formats) and cite the
-Main_MiSTer lines they were read from. The tests contain MiSTer text as data, copied as strings:
-`tango/test/test_confstr.c` checks the CONF_STR parser against the menu strings of Template_MiSTer (`Template.sv`) and
-Menu_MiSTer (`menu.sv`), and `tango/test/test_tango.c` the in-core menu against Template_MiSTer's. The `.zip` reader
-follows PKWARE's APPNOTE, the HID parser the USB HID 1.11 specification, the md5 RFC 1321.
+Main_MiSTer lines they were read from. The `.zip` reader follows PKWARE's APPNOTE, the HID parser the USB HID 1.11
+specification, the md5 RFC 1321.
 
 ## Licence
 
@@ -286,8 +278,6 @@ follows PKWARE's APPNOTE, the HID parser the USB HID 1.11 specification, the md5
   Tango's changes to them included: the files Tango changed say so in their headers ("Modified for Tango, 2026 ...
   Apache-2.0 as the original"). Apache-2.0 code may be part of a GPL-3.0 work; the combined firmware is distributed
   under GPL-3.0-or-later.
-- **The MiSTer test data** (the Template_MiSTer and Menu_MiSTer CONF_STR strings in `tango/test/`) is
-  GPL-2.0-or-later, as its upstream headers state.
 
 These third-party parts keep their own licences (their notices are in the files):
 

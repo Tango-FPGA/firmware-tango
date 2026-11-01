@@ -30,7 +30,7 @@
  *                        (file_io.cpp 847-869: FileLoadConfig/FileSaveConfig, raw bytes), loaded at core start
  *                        and sent with status[0] (reset) set, released at the end of the init; UIO_SET_STATUS2
  *                        sends the whole word
- * Look: the Tango pages (menu-tango tools/osd-model/launcher_pages.py INCORE_PAGES, TEMPLATE_PAGES; rows exactly as MiSTer): options
+ * Look: the Tango pages (menu-tango tools/osd-model/launcher_pages.py INCORE_PAGES, and the Template core's pages; rows exactly as MiSTer): options
  * show their value right-aligned (no ':'), a "-,Text" line is centred.
  *   menu.cpp 2998-3019, 4188-4431  Define <core> buttons: tango_padmap.[ch]
  *   menu.cpp 1905-1908, 2263-2293, 8654   MENU_SAVE_CHECK / WAIT: opening the OSD within 500 ms of a save write shows
