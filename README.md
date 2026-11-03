@@ -1,6 +1,9 @@
 # firmware-tango -- the Tango BL616 firmware
 
-**Version 2026-11-01** (date code `20261101`)
+**Version 2026-11-03** (date code `20261103`)
+
+This release changes documentation only. The firmware is unchanged since release `20261101`: the current image is
+`firmware-tango_20261101.bin`, id `gd2ddb03 2026-11-01 12:00`.
 
 firmware-tango is the firmware of the **BL616 microcontroller** on the **Sipeed Tang Console 138K**, the board the
 Tango FPGA system runs on. It is a fork of [FPGA Companion](https://github.com/MiSTle-Dev/FPGA-Companion)
@@ -13,6 +16,9 @@ The FPGA side is not in this repository: the framework every core is built on is
 [sys-tango](https://github.com/Tango-FPGA/sys-tango), the launcher core (`menu.bin`) is
 [menu-tango](https://github.com/Tango-FPGA/menu-tango) (released separately), and
 [console-template-tango](https://github.com/Tango-FPGA/console-template-tango) is the example core.
+
+To install it, the easiest way is the [Firmware Installer](https://tango-fpga.github.io/flasher-tango/) in Chrome or
+Edge (see [Installing](#installing)).
 
 ## Contents
 
@@ -76,12 +82,18 @@ upstream's `console60k` and `primer25k` board names, but the Tango gateware exis
 
 ## Installing
 
+The easiest way: the [Firmware Installer](https://tango-fpga.github.io/flasher-tango/) in Chrome or Edge, with nothing
+to install. The steps are in the
+[Installing the firmware](https://github.com/Tango-FPGA/docs-tango/wiki/Installing-the-firmware) guide.
+
+Without the installer, from the command line:
+
 The BL616's flash holds two images:
 
 | Address | Image | From |
 |---|---|---|
 | `0x0` | the **FPGA Partner** firmware (Sipeed's). It keeps the board's USB debugger (JTAG and UART for a PC) working and starts the firmware at `0x40000`. | not in this repository: [FPGA Companion](https://github.com/MiSTle-Dev/FPGA-Companion), `src/bl616/bl616_fpga_partner/bl616_fpga_partner_Console.bin` (110,992 bytes, sha256 `38e45f62965548c3e0efbf1048f48d28f45bb06b746a589ccba0ce7c801d6190`; FPGA Companion release v1.4.29's `bl616_fpga_partner_console60k.bin` is the same file) |
-| `0x40000` | **firmware-tango** | the release's `firmware-tango_20261101.bin` (attached to the GitHub Release, and the same file in this repository's `releases/` folder), or your own build |
+| `0x40000` | **firmware-tango** | the current image, `firmware-tango_20261101.bin` (attached to the GitHub Release `firmware-tango-20261101`, and the same file in this repository's `releases/` folder), or your own build |
 
 If `0x0` already holds this FPGA Partner image (the sha256 above), only `0x40000` needs writing.
 
@@ -89,9 +101,7 @@ If `0x0` already holds this FPGA Partner image (the sha256 above), only `0x40000
 
 1. Unplug every cable that can power the board, including the **FPGA** USB-C and any power supply (HDMI can stay).
    While anything powers the board, the BL616 is already running and ignores the BOOT button.
-2. Hold the **BOOT** button. On the current Console board it is the small button labelled BOOT just above the
-   **MCU** USB-C port: of the two buttons stacked there, the shorter, flat one (not S2). On older Consoles it sits on
-   the module, next to its USB-C port.
+2. Hold the **BOOT** button, on the underside of the board, next to the **MCU** USB-C port.
 3. Plug a USB cable from the PC into the **MCU** USB-C port, then release BOOT.
 4. The PC should now show a USB device **`Bouffalo CDC DEMO`** (`349b:6160`) with a serial port (`/dev/ttyACM*` on
    Linux). If it shows `SIPEED USB Debugger`, the board is not in update mode: start again at step 1.
@@ -164,9 +174,9 @@ request in a small file, `/menu.req`.
 Open a core's menu, **System > About**: under `TangoFPGA.com` it shows `Tango FPGA v<yymmdd> (g<hash>)` (the
 firmware's build date and the commit it was built from) and the core's name and version. The launcher's System
 Settings shows the whole id, `Firmware g<hash> <date> <time>`. `-dirty` after the hash means the image was built from
-a tree that differed from that commit; `Tango FPGA (build unknown)` means it was built without `build.sh`. The release
-image's id is `g<hash> 2026-11-01 12:00`, the hash of the commit it was built from: the release's source commit, the one
-before the commit that adds the image under `releases/`.
+a tree that differed from that commit; `Tango FPGA (build unknown)` means it was built without `build.sh`. The current
+release image, `firmware-tango_20261101.bin`, has the id `gd2ddb03 2026-11-01 12:00`: `d2ddb03` is the commit it was
+built from, the source commit of release `20261101` (the one before the commit that adds the image under `releases/`).
 
 ## Building from source
 
@@ -208,10 +218,11 @@ names it `firmware-tango_<datecode>.bin`). Two checks fail the build:
 
 **Reproducible builds.** Build from a clean checkout, with `clean`, and with `SOURCE_DATE_EPOCH` set: GCC pins every
 `__DATE__` / `__TIME__` to it (in UTC), `mk_fwid.sh` pins the id's date, and every compile maps the build machine's
-directories away (`-ffile-prefix-map`, `companion/src/bl616/CMakeLists.txt`). Built this way from two checkouts of this
-commit in different folders, with different build trees, the image came out byte-identical. The release image was
-built so, from this commit, with the SDK, toolchain and FPGA Companion commits above. The date-code tag `20261101`
-is on the next commit, which only adds the image under `releases/`, so check out the tag's parent:
+directories away (`-ffile-prefix-map`, `companion/src/bl616/CMakeLists.txt`). Built this way from two checkouts of one
+commit in different folders, with different build trees, the image came out byte-identical. The current release image,
+`firmware-tango_20261101.bin`, was built so from the source commit of release `20261101`, with the SDK, toolchain and
+FPGA Companion commits above. The date-code tag `20261101` is on the next commit, which only adds the image under
+`releases/`, so check out the tag's parent:
 
     git checkout 20261101^
     SOURCE_DATE_EPOCH=$(date -u -d '2026-11-01 12:00' +%s) ./build.sh console138k clean
