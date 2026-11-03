@@ -22,9 +22,9 @@
  *                       Misc: Menu / B / exit -> Cores, Right on a row that does not take it -> System Settings.
  *
  * Differences, all Tango's, so the pages never promise what is not built: System Settings has no Scripts or Help
- * (menu-tango docs/LAUNCHER.md) and no "Switch to USB"; Remap keyboard and Define joystick buttons, and Misc. Options'
- * Config / Boot core / Players, are dim placeholders that say "Not available yet" when selected; Misc.'s Information
- * block lists only what the firmware knows.
+ * (menu-tango docs/LAUNCHER.md) and no "Switch to USB"; Remap keyboard and Define joystick buttons are dim placeholders
+ * that say "Not available yet" when selected; Misc. Options has no Config, Boot core or Players rows, and its
+ * Information block lists only what the firmware knows.
  */
 #ifndef TANGO_LAUNCHER_H
 #define TANGO_LAUNCHER_H

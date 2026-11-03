@@ -76,6 +76,8 @@ void tango_display_name(const char *name, char *alt, int cap, char date[16])
     int len = (int)strlen(name) - core_ext_len(name);
     if (len > cap - 1) len = cap - 1;
     memcpy(alt, name, (size_t)len); alt[len] = 0;
+    /* an .mra has no date column (the row is drawn without one): no date code is split off its name */
+    if (ends_with(name, ".mra")) { date[0] = 0; return; }
     char *p = strstr(alt, "_20");
     if (p && strlen(p + 3) < 6) p = NULL;
     if (p) { *p = 0; strncpy(date, p + 3, 15); date[15] = 0; }

@@ -79,7 +79,7 @@ int tango_launcher_detect(tango_launcher_t *L, const tango_link_t *link)
 }
 
 /* ---------------------------------------------------------------- System Settings / Misc. Options */
-enum { SI_NONE = 0, SI_REMAP, SI_DEFINE, SI_REBOOT, SI_EXIT, MI_CONFIG, MI_BOOT, MI_PLAYERS, MI_COREVOL, MI_GLOBVOL, SI_ABOUT };
+enum { SI_NONE = 0, SI_REMAP, SI_DEFINE, SI_REBOOT, SI_EXIT, MI_COREVOL, MI_GLOBVOL, SI_ABOUT };
 static const tango_legend_t LEG_SYS[]  = { { "A", "select" }, { "Menu", "cores" }, { "\x83", "misc." } };
 static const tango_legend_t LEG_ABOUT[] = { { "\x83", "back" } };
 static const tango_legend_t LEG_MISC[] = { { "\x83\x7f", "change" }, { "A", "select" }, { "Menu", "cores" } };
@@ -123,9 +123,9 @@ static void build_system(tango_launcher_t *L)
     srow_add(L, TR_ACT, SI_EXIT, "exit", 0);
 }
 
-/* MENU_MISC1 (menu.cpp 4030-4098).  Information lists only what the firmware knows.  Config, Boot core and Players are
- * placeholders (alternate inis, boot core, players).  Core Volume and Global Volume (tango_volume.h) when the
- * platform has the state; the launcher's own Core Volume is, as in MiSTer, not saved or loaded (audio.cpp 249-253). */
+/* MENU_MISC1 (menu.cpp 4030-4098) without Config, Boot core and Players (not built: no row for them).  Information lists
+ * only what the firmware knows, then one blank row.  Core Volume and Global Volume (tango_volume.h) when the platform has
+ * the state; the launcher's own Core Volume is, as in MiSTer, not saved or loaded (audio.cpp 249-253). */
 static void build_misc(tango_launcher_t *L)
 {
     L->nsrow = 0;
@@ -135,9 +135,7 @@ static void build_misc(tango_launcher_t *L)
         if (L->plat && L->plat->ip) L->plat->ip(L->plat->ctx, ip, sizeof ip);
         int n = tango_info_lines(L->sline, L->vs, ip);
         for (int i = 0; i < n; i++) srow_add(L, TR_CENTER, SI_NONE, L->sline[i], 0);
-        while (L->nsrow < 5) srow_add(L, TR_BLANK, SI_NONE, NULL, 0);
     }
-    srow_add(L, TR_DIS, MI_CONFIG, "Config", 0);
     srow_add(L, TR_BLANK, SI_NONE, NULL, 0);
     if (L->plat && L->plat->vol) {
         const tango_vol_t *v = L->plat->vol;
@@ -145,9 +143,6 @@ static void build_misc(tango_launcher_t *L)
         srow_add(L, TR_VOL, MI_COREVOL, "Core Volume", 0); L->srow[L->nsrow - 1].value = L->vtxt[0];
         srow_add(L, v->vol & 0x10 ? TR_OPT : TR_VOL, MI_GLOBVOL, "Global Volume", 0); L->srow[L->nsrow - 1].value = L->vtxt[1];
     }
-    while (L->nsrow < 10) srow_add(L, TR_BLANK, SI_NONE, NULL, 0);
-    srow_add(L, TR_DIS, MI_BOOT, "Boot core", 0);
-    srow_add(L, TR_DIS, MI_PLAYERS, "Players", 0);
     while (L->nsrow < TL_ROWS - 1) srow_add(L, TR_BLANK, SI_NONE, NULL, 0);
     srow_add(L, TR_ACT, SI_EXIT, "exit", 0);
     L->srow[L->nsrow - 1].value = "\x7f";                              /* STD_EXIT with OSD_ARROW_RIGHT (menu.cpp 4079) */
@@ -477,7 +472,7 @@ static int settings_event(tango_launcher_t *L, tango_ev_t ev)
 {
     build_settings(L);
     uint8_t *sel = &L->sel[L->mode];
-    int id = L->sid[*sel], placeholder = id == SI_REMAP || id == MI_CONFIG || id == MI_BOOT || id == MI_PLAYERS;
+    int id = L->sid[*sel], placeholder = id == SI_REMAP;
     int dir = ev == TANGO_EV_UP ? -1 : ev == TANGO_EV_DOWN ? 1 : 0;
     if (L->mode == TL_MISC && (id == MI_COREVOL || id == MI_GLOBVOL) && L->plat->vol) {   /* menu.cpp 4116-4126 */
         int cmd = (ev == TANGO_EV_LEFT || ev == TANGO_EV_MINUS) ? -1 : (ev == TANGO_EV_RIGHT || ev == TANGO_EV_PLUS) ? 1 :
@@ -506,7 +501,7 @@ static int settings_event(tango_launcher_t *L, tango_ev_t ev)
         if (L->mode == TL_SYSTEM) { open_page(L, TL_MISC, SI_EXIT); return 1; }   /* menusub = 3: exit (menu.cpp 4040-4046) */
         break;
     case TANGO_EV_RIGHT:
-        if (L->mode == TL_MISC && !placeholder) { open_page(L, TL_SYSTEM, SI_DEFINE); return 1; }   /* "go back to the core requesting this menu" */
+        if (L->mode == TL_MISC) { open_page(L, TL_SYSTEM, SI_DEFINE); return 1; }   /* "go back to the core requesting this menu" */
         break;
     case TANGO_EV_SELECT:
         if (id == SI_EXIT) { to_cores(L); return 1; }
@@ -519,10 +514,6 @@ static int settings_event(tango_launcher_t *L, tango_ev_t ev)
         return 0;
     default:
         break;
-    }
-    if (L->mode == TL_MISC && placeholder && (ev == TANGO_EV_LEFT || ev == TANGO_EV_RIGHT || ev == TANGO_EV_MINUS || ev == TANGO_EV_PLUS)) {
-        set_status(L, "Not available yet", L->srow[*sel].label);    /* a row that will take Left / Right says so, too */
-        return 1;
     }
     return 0;
 }

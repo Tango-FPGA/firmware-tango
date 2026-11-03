@@ -12,7 +12,8 @@
  *       files only with the core extension (MiSTer RBF/MRA/MGL; Tango .fs, .bin and .mra;
  *       no MGL yet)
  *   file_io.cpp get_display_name 1407-1426   core name = file name minus extension; "_20" + at least
- *       6 more characters splits off the date code (else "------")
+ *       6 more characters splits off the date code (else "------"); Tango: an .mra has no date code ("")
+ *       and its name is not split, so its row has no date column
  *   file_io.cpp DirentComp 1334-1370   ".." first, folders before files, case-insensitive name,
  *       (ignoring a 4-character ".xxx" tail), shorter first on a common prefix, then date code
  *   file_io.cpp 1880-1916, 70-124   Up/Down wrap around; Left/Right (PgUp/PgDn) move one page and clamp;
@@ -143,7 +144,7 @@ int  tango_ext_idx(const char *name, const char *exts);            /* user_io_ex
 
 /* helpers, exported for the unit tests */
 int  tango_is_core_file(const char *name);                       /* listed as a core in a Cores folder */
-void tango_display_name(const char *name, char *alt, int cap, char date[16]);   /* get_display_name for a core */
+void tango_display_name(const char *name, char *alt, int cap, char date[16]);   /* get_display_name for a core (.mra: date "") */
 int  tango_dirent_less(const char *alt1, const char *date1, int dir1, const char *alt2, const char *date2, int dir2);
 
 #endif
