@@ -364,7 +364,8 @@ void vp_parse_ini(const uint8_t *buf, int len, const char *core, vp_ini_t *ini)
                 { "VFILTER_VERTICAL_DEFAULT", ini->vfilter_vertical_default },
                 { "VFILTER_SCANLINES_DEFAULT", ini->vfilter_scanlines_default },
                 { "VFILTER_INTERLACE_DEFAULT", ini->vfilter_interlace_default },
-                { "SHMASK_DEFAULT", ini->shmask_default }, { "PRESET_DEFAULT", ini->preset_default } };
+                { "SHMASK_DEFAULT", ini->shmask_default }, { "PRESET_DEFAULT", ini->preset_default },
+                { "GAMMA_DEFAULT", ini->gamma_default } };              /* (Tango's key: no cfg.cpp line) */
             for (int k = 0; k < (int)(sizeof S / sizeof S[0]); k++)
                 if (ieq(line, S[k].k)) { cpy(S[k].dst, (int)(1024), v); }
             if (ieq(line, "SHMASK_MODE_DEFAULT")) ini->shmask_mode_default = atoi(v);
@@ -659,8 +660,13 @@ static void cfg_defaults(tango_vproc_t *v)
 }
 static void load_saved(tango_vproc_t *v)
 {
-    /* loadGammaCfg (793-803) */
-    if (load(v, "gamma", v->gamma, VP_CFG_LEN - 1) > 0 && v->gamma[0] > 1) memset(v->gamma, 0, sizeof v->gamma);
+    /* loadGammaCfg (793-803); no <core>_gamma.cfg: Tango.ini's GAMMA_DEFAULT (Tango's key), on, as SHMASK_DEFAULT */
+    if (load(v, "gamma", v->gamma, VP_CFG_LEN - 1) > 0) {
+        if (v->gamma[0] > 1) memset(v->gamma, 0, sizeof v->gamma);
+    } else if (v->ini.gamma_default[0]) {
+        cpy(v->gamma + 1, (int)(VP_CFG_LEN - 1), v->ini.gamma_default);
+        v->gamma[0] = 1;
+    }
     /* loadScalerCfg (651-693) */
     if (load(v, "scaler", v->flt, (int)sizeof v->flt) > 0) {
         if (v->flt[0].mode > 1) memset(v->flt, 0, sizeof v->flt);

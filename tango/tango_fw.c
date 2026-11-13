@@ -1215,24 +1215,17 @@ static int dl_read_mra(void *c, uint8_t *b, unsigned n)
  * one of those -- a plain restart-launch, ext != ".mra", never touches any of this, exactly MiSTer's own
  * is_arcade() gate).
  *
- * Index assignment: DIP word at 254, cheat word at 255.
- * DIP is MiSTer's own fixed-index convention (mra_loader.cpp's arcade_sw_send:
- * `user_io_set_index(254)`, sizeof(dip_cur) == 8, sent whole, only if
- * dip_num). NVRAM uses the .mra's own <nvram index="N">, MiSTer's own arcade_nvm_load/save convention
- * (support/arcade/mra_loader.cpp:60-107). The cheat index 255 is not found in Main_MiSTer's source:
- * its arcade_sw_send only ever sends index 254 (<switches>) -- there is no literal "255" anywhere in it, and
- * <cheats> there is handled entirely by the newer cheats.cpp Pro-cheat engine (a different, more
- * general mechanism, not a second 64-bit word at a fixed index). A fixed cheat index 255 is
- * plausibly from an older MiSTer revision that used a second sw_struct-shaped word for <cheats> before
- * cheats.cpp replaced it. tango_mra.h parses <cheats> as a second tango_mra_switches_t, the same shape
- * as <switches>, and this code follows that (index 255, same send/save mechanism). Open: whether 255 is
- * still right, or a modern cheat belongs on the Pro-cheat path instead (a materially different
- * mechanism).
+ * Indexes: the DIP word goes to index 254, as mra_loader.cpp's arcade_sw_send (`user_io_set_index(254)`,
+ * sizeof(dip_cur) == 8, sent whole, only if dip_num). Index 255 is Main_MiSTer's cheat index: cheats.cpp
+ * clears it at cheats_init (:148, a 2-byte zero count) and sends the enabled cheat codes there in
+ * cheats_send (:380); an .mra's <cheats> block fills that cheat list (mra_loader.cpp 715-746, 970-980,
+ * cheats_add_arcade). Tango sends the <dip> word of the .mra's <cheats> block (tango_mra.h: a second
+ * tango_mra_switches_t, the same shape as <switches>) to index 255, with the DIP word's send/save mechanism.
+ * NVRAM uses the .mra's own <nvram index="N">, as arcade_nvm_load/save (support/arcade/mra_loader.cpp:60-107).
  *
  * File I/O, mirroring MiSTer's own naming
  * (mra_loader.cpp:1133-1143, 66-77): the .mra's own basename with ".mra" replaced by ".dip" / ".nvm"
- * (cheat: ".cheat" -- the citation gap noted above is about the INDEX (255) and the send/save
- * MECHANISM for cheats, not this filename), in
+ * (cheat: ".cheat"), in
  * config/dips/, config/cheats/, config/nvram/ respectively -- the same config/ root c_save_cfg/c_load_cfg
  * (status word) and
  * c_save_map/pm_load (pad maps) already use, just their own subfolders, not <NAME>.CFG's own flat layout
@@ -1391,7 +1384,7 @@ static void arc_filename(char *out, int cap, const char *suffix)
  * dip_def; load the saved override if one exists (leaves dip_cur unchanged if not, matching
  * "arcade_sw_load... FileLoadConfig into dip_cur"); dip_saved = dip_cur; send dip_cur IF dip_num (a core
  * with no <switches> at all gets no send, matching "if (sw->dip_num)"). Cheats: identical, index 255 (see
- * this section's own header comment on the citation gap for 255 specifically). Uses
+ * this section's header comment). Uses
  * tango_mra_switches_summary, NOT tango_mra_switches_parse -- see that function's own comment
  * (tango_mra.c): the full per-<dip> table is far too large to malloc on the BL616 at all. Returns 0
  * only if the .mra itself would not open (a real I/O error, not "no such block" -- that case still returns
@@ -1796,7 +1789,9 @@ static void pm_apply(int port)
     char name[96]; uint32_t map[TANGO_PM_BTNS]; uint8_t pairs[2 * TANGO_PM_BTNS];
     tango_pm_mapname(CM.name, pads[port].vid, pads[port].pid, name, sizeof name);
     const char *how;
-    if (pm_load(name, map)) how = "file";
+    int idok = tango_pm_id_read(pads[port].vid, pads[port].pid);       /* 0000: no file is the pad's; the guess or the system map */
+    if (!idok) tango_debugf("port %d: pad ID not read (0000:0000): no map file is looked up", port);
+    if (idok && pm_load(name, map)) how = "file";
     else if (tango_pm_bcount(core_conf)) { tango_pm_guess_mm(core_conf, SYSV[port] ? SYSM[port] : tango_pm_mmap, map); how = SYSV[port] ? "guess (map_joystick over its system map)" : "guess (map_joystick)"; }
     else if (SYSV[port]) { memset(map, 0, sizeof map); for (int i = 0; i < 12; i++) map[i] = SYSM[port][i] & 0xFFFF; how = "system map"; }
     else { tango_hid_set_padmap(&link, (uint8_t)port, 0xFE, 0, NULL, 0); tango_debugf("port %d: default core map (no J names, no %s)", port, name); return; }
@@ -1962,7 +1957,9 @@ static void mb_load(int port)
 {
     tango_mb_t d; uint32_t m[TANGO_PM_BTNS]; char name[40];
     MBC[port] = 0; SYSV[port] = 0; tango_mb_default(&d);
-    if (pads[port].conn) {
+    if (pads[port].conn && !tango_pm_id_read(pads[port].vid, pads[port].pid))
+        tango_debugf("port %d: pad ID not read (0000:0000): no system map is looked up", port);
+    else if (pads[port].conn) {
         tango_mb_mapname(pads[port].vid, pads[port].pid, name, sizeof name);
         if (pm_load(name, m)) {
             if (tango_mb_from_map(&d, m)) MBC[port] = 1;
@@ -2149,6 +2146,9 @@ static void raw_in(const rawsnap_t *s, uint32_t now_ms)
         if (core_mode) mb_load(p);                    /* first: the pad manager's pm_apply reads the system map it finds */
     }
     if (PM) padmgr_snapshot(PM, p, s->flags, s->vid, s->pid, s->raw);
+    /* the pad manager's apply (resolve_port) can come while REPORT still says not connected (the stream is live but not yet armed, or a decode table
+     * just re-armed it): pm_apply then returns at !conn, so the map is sent again when the port connects (idempotent: SET_PADMAP) */
+    if (PM && changed && conn && core_mode) pm_apply(p);
     if (PM && core_mode && conn) {                /* MiSTer's has_default_map for a pad that is not a DualShock: a decode that came from a definition, a database line or a fixed layout is a default map; the descriptor alone, nothing, or a pad we do not decode is not (input.cpp 3754) */
         int src = padmgr_port_src(PM, p);
         if (src) tango_core_set_known(&CM, p, SYSV[p] || (src != PRS_HEURISTIC && src != PRS_LEGACY && src != PRS_QUIET));

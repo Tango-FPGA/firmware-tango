@@ -73,6 +73,9 @@ void vp_parse_preset(const uint8_t *buf, int len, void (*cb)(void *ctx, const ch
 typedef struct {
     char afilter_default[1024], vfilter_default[1024], vfilter_vertical_default[1024],
          vfilter_scanlines_default[1024], vfilter_interlace_default[1024], shmask_default[1024], preset_default[1024];
+    /* Tango's addition (MiSTer.ini has no gamma key): GAMMA_DEFAULT, a file under gamma/, gamma on when the core has no
+     * <core>_gamma.cfg */
+    char gamma_default[1024];
     int  shmask_mode_default;
     /* native-rate output (MiSTer cfg.cpp 48, 70-71): VSYNC_ADJUST 0..2, -1 = not in
      * Tango.ini (nothing is sent: the core's build default stays); REFRESH_MIN / REFRESH_MAX in Hz, 0 = no bound */

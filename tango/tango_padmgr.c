@@ -577,6 +577,7 @@ int plsess_finish(plsess_t *s, padmgr_t *m, int port, const plsess_files_t *f, c
     if (t.count == 0) return 0;
     int flags = 0;
     if (m && padmgr_set_table(m, port, &t)) flags |= PLF_APPLIED;
+    if (!s->vid && !s->pid) return flags;           /* the ID was not read (tango_pm_id_read): the table serves this connection, no file is named after 0000 */
     if (f && f->save_dec) {
         uint8_t buf[10 + 5 + 5 * PD_MAXENT]; char nm[40];
         int n = pl_dec_save(s->vid, s->pid, s->ver, &t, buf, sizeof buf);

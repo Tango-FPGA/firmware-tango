@@ -1325,6 +1325,14 @@ int tango_reboot_cold(unsigned held_ms)
 static int define_result(tango_coremenu_t *cm, int r)
 {
     if (r == PMC_NONE) return TANGO_CM_NOTHING;
+    if (r == PMC_SAVED && (cm->pm.dev < 0 || !tango_pm_id_read(cm->pm.vid, cm->pm.pid))) {
+        /* no file can be named for this pad (tango_pm_id_read): nothing saved, the pads get their maps back, the notice says why */
+        if (cm->plat->maps_changed) cm->plat->maps_changed(cm->plat->ctx);
+        cm->mode = TANGO_CM_SYSTEM; cm->sel = 2; rebuild(cm);
+        message(cm, "Pad ID not read", "replug the pad");
+        tango_core_redraw(cm);
+        return TANGO_CM_REDRAWN;
+    }
     if (r == PMC_SAVED) {                               /* finish_map_setting(0): save_map (input.cpp 1905) */
         char name[80];
         tango_pm_mapname(cm->name, cm->pm.vid, cm->pm.pid, name, sizeof name);

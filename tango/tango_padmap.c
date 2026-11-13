@@ -163,6 +163,8 @@ void tango_pm_mapname(const char *core, uint16_t vid, uint16_t pid, char *out, i
     snprintf(out, (size_t)cap, "%s_input_%04x_%04x_v3.map", core, vid, pid);   /* get_map_name 1852, idstr 5519 */
 }
 
+int tango_pm_id_read(uint16_t vid, uint16_t pid) { return vid != 0 || pid != 0; }
+
 int tango_pm_pairs(const uint32_t map[TANGO_PM_BTNS], uint8_t pairs[2 * TANGO_PM_BTNS])
 {
     for (int i = 0; i < TANGO_PM_BTNS; i++) {
@@ -229,8 +231,8 @@ static int check_end(tango_pmcap_t *c, int select, int menu)
         if (!c->sys) { c->state = PMC_ASK; c->ask_sel = 0; }   /* finish_map_setting(0): saved, then the question (the menu core has none, 4366-4385) */
         return PMC_SAVED;
     }
-    if (select || menu || c->button >= c->count)
-        return menu ? PMC_DISMISSED : PMC_SAVED;           /* finish_map_setting(menu) */
+    if (select || menu || c->button >= c->count)           /* finish_map_setting(menu); with no device it returns at once (input.cpp 1876) */
+        return (menu || c->dev < 0) ? PMC_DISMISSED : PMC_SAVED;
     return PMC_REDRAW;
 }
 

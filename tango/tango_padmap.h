@@ -61,6 +61,9 @@ void tango_pm_guess_mm(const char *conf, const uint32_t *mmap, uint32_t map[TANG
 int  tango_pm_sysmap_valid(const uint32_t m[TANGO_PM_BTNS]);      /* the twelve buttons all hold a raw code (0x100 + bit) */
 /* <core>_input_<vid>_<pid>_v3.map (get_map_name, not unique) */
 void tango_pm_mapname(const char *core, uint16_t vid, uint16_t pid, char *out, int cap);
+/* 1 when the pad's VID:PID was read.  Both 0 = the framework never read the device descriptor (usb_fs_host gave up): the ID is not the pad's,
+ * so no map file may be written or loaded under it (a file named _0000_0000_ belongs to no pad) */
+int  tango_pm_id_read(uint16_t vid, uint16_t pid);
 /* a core map as SET_PADMAP pairs (primary, alternative) for joystick bits 0..31: FF = none. Returns 32. */
 int  tango_pm_pairs(const uint32_t map[TANGO_PM_BTNS], uint8_t pairs[2 * TANGO_PM_BTNS]);
 

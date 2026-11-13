@@ -230,6 +230,7 @@ static void define_save(tango_launcher_t *L, int menu_a, int menu_b)
     memset(map, 0, sizeof map);
     for (int i = 0; i < 12; i++) map[i] = PM(L)->map[i] & 0xFFFF;
     if (menu_a >= 0) { m.a = (uint8_t)menu_a; m.b = (uint8_t)menu_b; map[TANGO_SYS_BTN_OSD] = TANGO_PM_CODE(menu_a); map[TANGO_SYS_BTN_OSD + 1] = TANGO_PM_CODE(menu_b); }
+    if (PM(L)->dev >= 0 && !tango_pm_id_read(PM(L)->vid, PM(L)->pid)) { define_end(L, "Pad ID not read", "replug the pad"); return; }   /* no file can be named for it */
     int ok = L->plat->save_sysmap && PM(L)->dev >= 0 && L->plat->save_sysmap(L->plat->ctx, PM(L)->vid, PM(L)->pid, map) == 0;
     if (menu_a >= 0) tango_mb_name(&m, nm); else snprintf(nm, sizeof nm, "buttons saved, menu button unchanged");
     define_end(L, ok ? "Joystick map" : "Could not save", ok ? nm : "the system map");
@@ -237,6 +238,7 @@ static void define_save(tango_launcher_t *L, int menu_a, int menu_b)
 
 static void define_menu_phase(tango_launcher_t *L, const uint32_t raw[2])
 {
+    if (!tango_pm_id_read(PM(L)->vid, PM(L)->pid)) { define_end(L, "Pad ID not read", "replug the pad"); return; }   /* nothing can be saved for it: no Menu entry */
     L->dph = 1; L->dhave = 1; L->dvid = PM(L)->vid; L->dpid = PM(L)->pid; L->dtext[0] = 0; L->dt0 = L->now_ms;
     tango_mbl_start(&L->ml, raw, L->now_ms);
 }
@@ -531,6 +533,7 @@ int tango_launcher_event(tango_launcher_t *L, tango_ev_t ev)
         if (ev == TANGO_EV_BACK || ev == TANGO_EV_MENU) { define_end(L, "Define buttons", "cancelled: nothing saved"); return 1; }
         if (L->dph == 0) {
             int r = ev == TANGO_EV_SELECT ? tango_pmcap_key(PM(L), PMC_KEY_ENTER) : ev == TANGO_EV_SPACE ? tango_pmcap_key(PM(L), PMC_KEY_SPACE) : PMC_NONE;
+            if (r == PMC_DISMISSED) { define_end(L, "Define buttons", "nothing pressed: unchanged"); return 1; }   /* no pad picked yet: nothing saved (input.cpp 1876) */
             if (r == PMC_SAVED) {
                 if (ev == TANGO_EV_SELECT) { define_save(L, -1, -1); return 1; }        /* Enter: finish_map_setting(0) with what was taken */
                 uint32_t raw[2] = { PM(L)->prev[0], PM(L)->prev[1] };
