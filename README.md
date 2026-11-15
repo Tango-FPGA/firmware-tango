@@ -1,6 +1,6 @@
 # firmware-tango -- the Tango BL616 firmware
 
-**Version 2026-11-13** (date code `20261113`)
+**Version 2026-11-15** (date code `20261115`)
 
 firmware-tango is the firmware of the **BL616 microcontroller** on the **Sipeed Tang Console 138K**, the board the
 Tango FPGA system runs on. It is a fork of [FPGA Companion](https://github.com/MiSTle-Dev/FPGA-Companion)
@@ -94,7 +94,7 @@ The BL616's flash holds two images:
 | Address | Image | From |
 |---|---|---|
 | `0x0` | the **FPGA Partner** firmware (Sipeed's). It keeps the board's USB debugger (JTAG and UART for a PC) working and starts the firmware at `0x40000`. | not in this repository: [FPGA Companion](https://github.com/MiSTle-Dev/FPGA-Companion), `src/bl616/bl616_fpga_partner/bl616_fpga_partner_Console.bin` (110,992 bytes, sha256 `38e45f62965548c3e0efbf1048f48d28f45bb06b746a589ccba0ce7c801d6190`; FPGA Companion release v1.4.29's `bl616_fpga_partner_console60k.bin` is the same file) |
-| `0x40000` | **firmware-tango** | the current image, `firmware-tango_20261113.bin` (attached to the GitHub Release `firmware-tango-20261113`, and the same file in this repository's `releases/` folder), or your own build |
+| `0x40000` | **firmware-tango** | the current image, `firmware-tango_20261115.bin`, in this repository's `releases/` folder (`releases/latest.json` names the newest image; the Firmware Installer reads it), or your own build |
 
 If `0x0` already holds this FPGA Partner image (the sha256 above), only `0x40000` needs writing.
 
@@ -121,7 +121,7 @@ builds for Linux, macOS and Windows). Put the images beside a configuration file
     address = 0x0
 
     [custom]
-    filedir = ./firmware-tango_20261113.bin
+    filedir = ./firmware-tango_20261115.bin
     address = 0x40000
 
 (`filedir` names the firmware file you downloaded; to write only the firmware, leave out the `[official]` section.)
@@ -181,8 +181,8 @@ Open a core's menu, **System > About**: under `TangoFPGA.com` it shows `Tango FP
 firmware's build date and the commit it was built from) and the core's name and version. The launcher's System
 Settings shows the whole id, `Firmware g<hash> <date> <time>`. `-dirty` after the hash means the image was built from
 a tree that differed from that commit; `Tango FPGA (build unknown)` means it was built without `build.sh`. The current
-release image, `firmware-tango_20261113.bin`, has the id `g<hash> 2026-11-13 12:00`: `<hash>` is the commit it was
-built from, the source commit of release `20261113` (the one before the commit that adds the image under `releases/`).
+release image, `firmware-tango_20261115.bin`, has the id `g<hash> 2026-11-15 12:00`: `<hash>` is the commit it was
+built from, the source commit of release `20261115` (the one before the commit that adds the image under `releases/`).
 
 ## Building from source
 
@@ -226,12 +226,12 @@ names it `firmware-tango_<datecode>.bin`). Two checks fail the build:
 `__DATE__` / `__TIME__` to it (in UTC), `mk_fwid.sh` pins the id's date, and every compile maps the build machine's
 directories away (`-ffile-prefix-map`, `companion/src/bl616/CMakeLists.txt`). Built this way from two checkouts of one
 commit in different folders, with different build trees, the image came out byte-identical. The current release image,
-`firmware-tango_20261113.bin`, was built so from the source commit of release `20261113`, with the SDK, toolchain
-and FPGA Companion commits above. The date-code tag `20261113` is on the next commit, which only adds the image under
-`releases/`, so check out the tag's parent:
+`firmware-tango_20261115.bin`, was built so from the source commit of release `20261115`, with the SDK, toolchain
+and FPGA Companion commits above. The date-code tag `20261115` is on the next commit, which only adds the image and
+`latest.json` under `releases/`, so check out the tag's parent:
 
-    git checkout 20261113^
-    SOURCE_DATE_EPOCH=$(date -u -d '2026-11-13 12:00' +%s) ./build.sh console138k clean
+    git checkout 20261115^
+    SOURCE_DATE_EPOCH=$(date -u -d '2026-11-15 12:00' +%s) ./build.sh console138k clean
 
 Prebuilt libraries inside the SDK keep their own version strings.
 
@@ -241,7 +241,7 @@ Prebuilt libraries inside the SDK keep their own version strings.
 |---|---|
 | `LICENSE-GPL-3.0`, `NOTICE` | the licence of the firmware as a whole (GPL-3.0-or-later) and its notice: the Main_MiSTer code per file, the FPGA Companion and the other third-party parts (see [Licence](#licence)) |
 | `build.sh`, `mk_fwid.sh` | the build and the firmware id |
-| `releases/` | the release images, `firmware-tango_<datecode>.bin`, one per release: the same files as the GitHub Releases' |
+| `releases/` | the release images, `firmware-tango_<datecode>.bin`, one per release, and `latest.json`, which names the newest image (its date code, file name, size and SHA-256; the Firmware Installer reads it) |
 | `companion/` | the FPGA Companion fork: upstream's tree at `ccb06d2` with Tango's changes (marked `Tango` / `TANGO` in the code and `Modified for Tango` in each changed file's header), upstream's documentation (`README.md`, `SPI.md`, `DEBUGGING.md`, `NETWORKING.md`, `src/bl616/README.md`) and `UPSTREAM.md` |
 | `companion/src/bl616/` | the BL616 port (`mcu_hw.c`, `CMakeLists.txt`); upstream's other ports (`src/rp2040`, `src/esp32`) are kept unchanged |
 | `tango/` | the Tango launcher, in-core menu, controller database, saves, zip / `.mra` loading and video processing (portable C) |
