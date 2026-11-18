@@ -190,6 +190,18 @@ void tango_launcher_diag(tango_launcher_t *L, const char *const *lines, int n);
 /* Shows a message in the legend row (e.g. why the last load failed) until the next key. */
 void tango_launcher_message(tango_launcher_t *L, const char *key, const char *text);
 
+/* The text after "Could not load" for a launch that did not start (shown by tango_fw.c in the boot after it): what =
+ * the core's display name, res = its TANGO_LOAD_* result, st = the Gowin status words { after the write, after the
+ * flash reload, after the erase } (read for TANGO_LOAD_NOT_DONE / TANGO_LOAD_FAILED only), rbf = for an .mra whose
+ * core was not found, its <rbf> text ("" = the .mra had no <rbf>, or it could not be read), else NULL.
+ *   TANGO_LOAD_NOT_FOUND, rbf "galaxian": "<what>: core galaxian not found in _Arcade/cores"
+ *   TANGO_LOAD_NOT_FOUND, rbf "":         "<what>: no rbf found" (MiSTer's Info("No rbf found!") for an .mra
+ *                                          whose core it cannot find, mra_loader.cpp 1323 at c3dc8ed)
+ *   TANGO_LOAD_NOT_FOUND, rbf NULL:       "<what>: core not found" (the file itself was not on the card)
+ *   TANGO_LOAD_NOT_DONE:                  "<what>: not DONE  R <reload> E <erase> W <write>"
+ *   anything else:                        "<what>: upload failed  R <reload> E <erase>" */
+void tango_load_fail_text(char *out, int cap, const char *what, int res, const uint32_t st[3], const char *rbf);
+
 /* Re-lays out and sends the current page (only the rows that changed). */
 void tango_launcher_redraw(tango_launcher_t *L);
 /* a message in the legend row until the next key (the pad manager's "This joystick is not defined": MiSTer's Info() at the first press of a pad with no map, input.cpp 3754) */

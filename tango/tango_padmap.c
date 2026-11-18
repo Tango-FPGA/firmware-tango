@@ -322,7 +322,9 @@ static int event(tango_pmcap_t *c, int port, int bit, int value, uint32_t now_ms
 
 int tango_pmcap_raw(tango_pmcap_t *c, int port, uint16_t vid, uint16_t pid, uint32_t raw, uint32_t now_ms)
 {
-    if (c->lm && c->sys && port >= 0 && port <= 1) { c->prev[port] = raw; return PMC_NONE; }     /* the learner takes the presses (tango_pmcap_sample) */
+    /* a port the learner watches: its presses come from the REPORT2 payload (tango_pmcap_sample); any other port (a pad with a
+     * hard-wired FPGA decode, XInput or DualShock 4, which the firmware does not give the learner) is walked by its raw word */
+    if (c->lm && c->sys && port >= 0 && port <= 1 && c->lm->use[port]) { c->prev[port] = raw; return PMC_NONE; }
     if (port < 0 || port > 1 || c->state != PMC_MAP) { if (port >= 0 && port <= 1) c->prev[port] = raw; return PMC_NONE; }
     uint32_t ch = raw ^ c->prev[port];
     int r = PMC_NONE;

@@ -7,10 +7,10 @@
  * Tango. Our own code, written from the documented .mra format and from MiSTer's behaviour in
  * Main_MiSTer's support/arcade/mra_loader.cpp (xml_scan_rbf 956-991, get_rbf 1129-1205).
  *
- * The <rbf> lookup reads only the <rbf> tag: a value this narrow (one short tag, always near the top of
- * the file) needs no general parser. Never buffers the whole file (the ROM-assembly RAM budget applies
- * here too): tango_mra_find_rbf reads in small chunks through the same byte-addressable file interface
- * tango_zip.h already defines for one file on the card.
+ * The <rbf> lookup reads only the <rbf> tag: a value this narrow (one short tag, usually near the top of the file,
+ * but after any header comment of any length) needs no general parser. Never buffers the whole file (the
+ * ROM-assembly RAM budget applies here too): tango_mra_find_rbf reads in small chunks through the same
+ * byte-addressable file interface tango_zip.h already defines for one file on the card.
  */
 #ifndef TANGO_MRA_H
 #define TANGO_MRA_H
@@ -21,17 +21,20 @@
 
 #define TANGO_MRA_RBF_MAX 64     /* MiSTer's rbf fragment buffer is 1024 (kBigTextSize); core names are short */
 
-/* How far into the file to look for <rbf> before giving up (never the whole file: some .mra files carry
- * tens of KB of inline hex in <patch>/cheat blocks after it). Real files put <rbf> within the first few
- * hundred bytes (one sample file: offset ~310) -- 2048 is generous headroom, not a
- * real file's typical size. */
-#define TANGO_MRA_SCAN_MAX 2048
-
 /* Reads path (an .mra file) through io and extracts its <rbf>...</rbf> text, trimmed of surrounding
  * whitespace: the first "<rbf>" start tag found (case-insensitive, no attributes -- every real .mra uses
- * the plain form), up to the next '<'. Matches MiSTer's xml_scan_rbf, which also takes the first <rbf>
- * text node and nothing past it. 1 = found (rbf is NUL-terminated), 0 = not found, truncated past
- * TANGO_MRA_SCAN_MAX, an I/O error, or the file doesn't open. */
+ * the plain form) outside an XML comment, up to the next '<'. The whole file is scanned if need be, in
+ * fixed 128-byte reads with the match state carried from one read to the next (a tag split across two
+ * reads is still found), and the scan stops at that '<': nothing after the first <rbf> (the <rom>/<patch>
+ * data, tens of KB in some files) is read. A "<!--" ... "-->" comment is skipped whole, as MiSTer's XML
+ * parser does (sxmlc.c 71 and 1075-1091 deliver a comment as one TAG_COMMENT node whose tag is the whole
+ * comment text, so a <rbf> inside one never passes xml_scan_rbf's strcasecmp(node->tag, "rbf"),
+ * mra_loader.cpp 1006-1041, local Main_MiSTer copy at c3dc8ed) and as next_tag (tango_mra.c) does for P1:
+ * a header comment that names <rbf> in its text, or is long enough to push the tag past any fixed offset,
+ * neither hides the real tag nor stands in for it.
+ * MiSTer's xml_scan_rbf keeps the LAST <rbf> text it sees; real files carry exactly one, and this keeps the
+ * first so the scan can end there. 1 = found (rbf is NUL-terminated), 0 = not found (no <rbf>, an empty
+ * one, an I/O error before it, or the file doesn't open). */
 int tango_mra_find_rbf(const tango_zipfs_t *io, const char *path, char *rbf, int cap);
 
 /* Matches rbf against the entries of the folder at path (opened via fs, e.g. "_Arcade/cores"), MiSTer's
@@ -113,7 +116,8 @@ typedef struct {
     uint32_t pos;                 /* next byte to resume scanning from, in the .mra (never an implicit
                                     * stream cursor -- tango_zipfs_t's read() is offset-based, so every
                                     * scan here just re-reads whatever range it needs) */
-    int      want_index;
+    int      want_index;          /* tango_mra_rom_open's argument; -1 when opened by position (_open_nth) */
+    int      index;               /* the opened <rom>'s own index="" (atoi as mra_loader.cpp; absent = 0) */
     int      found;               /* a <rom index="want_index"> tag was actually seen (even if empty) --
                                     * lets a caller tell "declared empty" from "never declared" if it cares;
                                     * both behave the same (zero bytes), matching MiSTer */
@@ -168,6 +172,12 @@ typedef struct {
 int tango_mra_rom_open(tango_mra_rom_t *r, const tango_zipfs_t *mra_io, const char *mra_path,
                        int want_index, char *out_zip, int zip_name_cap);
 
+/* tango_mra_rom_open, but for the nth top-level <rom> of the file (0-based document order, whatever its index;
+ * r->index is that rom's index=""). r->found == 0 = the file has fewer than nth+1 <rom> tags. Same return and
+ * same open-file contract as tango_mra_rom_open. */
+int tango_mra_rom_open_nth(tango_mra_rom_t *r, const tango_zipfs_t *mra_io, const char *mra_path,
+                           int nth, char *out_zip, int zip_name_cap);
+
 /* tango_dl_pump's rd() shape: produces up to n assembled bytes for the <rom> tango_mra_rom_open found,
  * in <part> document order, with every <patch> already applied in place before a byte is ever handed
  * back (the patch pre-scan's own hex text is re-read and decoded from the .mra on demand -- it is
@@ -198,6 +208,99 @@ int tango_mra_rom_read(tango_mra_rom_t *r, const tango_zipfs_t *mra_io,
  * are the caller's to close, since the caller opened them. Safe to call more than once. */
 void tango_mra_rom_close(tango_mra_rom_t *r, const tango_zipfs_t *mra_io,
                          tango_zip_t *const zips[], const tango_zipfs_t *const zip_ios[]);
+
+/* ------------------------------------------------------------------ every <rom>, in document order
+ *
+ * MiSTer's loader (mra_loader.cpp: xml_send_rom, rom_start, rom_finish) assembles each <rom> of the file in
+ * document order and, at its </rom>, sends it as one download of its own: ioctl_index = the rom's index=""
+ * (user_io_set_index(romindex)), the bytes, then the close. Per <rom>:
+ *   - no data (an empty <rom>, or parts that add up to nothing): nothing is sent;
+ *   - md5="" given (not "" or "none") and the rom has a zip="": a mismatch discards the rom, nothing is sent;
+ *     a rom without zip="" is sent whatever its md5 (checksumsame = !strlen(zipname) || match);
+ *   - once a rom with index 0 has matched a declared md5 (validrom0), every later index-0 rom adds no data
+ *     (merged/non-merged alternatives of the same set) and is therefore not sent;
+ *   - a rom that cannot be assembled here (a part in none of its zips, an I/O error, interleave or a part-level
+ *     zip override -- TANGO_MRA_REFUSED) is not sent; the following roms still are.
+ * The download protocol needs each size before the first byte (tango_dl_begin's SELECT), so
+ * tango_mra_seq_plan assembles every rom once into a scratch buffer to count it and check its md5, and
+ * records the outcome; tango_mra_seq_next then re-opens the next sendable rom for the real stream
+ * (tango_mra_seq_read, tango_dl_pump's rd() shape). The archives a rom names are opened through the caller's
+ * tango_mra_zips_t, only while that rom is assembled or streamed. */
+
+#define TANGO_MRA_SEQ_MAX 16          /* <rom> entries planned per file; a 2093-file library has at most 8 */
+#define TANGO_MRA_SEQ_SEND        1   /* tango_mra_seq_rom_t.status: this rom is sent */
+#define TANGO_MRA_SEQ_EMPTY       0   /*   no data: not sent */
+#define TANGO_MRA_SEQ_SUPPRESSED (-4) /*   an index-0 rom after one that matched its md5: not sent */
+#define TANGO_MRA_SEQ_OVER_CAP   (-5) /*   past TANGO_MRA_SEQ_MAX: this and every later <rom> are not planned */
+                                      /*   -1, TANGO_MRA_REFUSED, TANGO_MRA_MD5_MISMATCH: as tango_mra_rom_read */
+
+typedef struct {
+    uint8_t  ordinal;          /* position among the file's top-level <rom> tags */
+    uint8_t  index;            /* the ioctl index: index="" as an unsigned char (rom_start's parameter) */
+    int8_t   status;           /* TANGO_MRA_SEQ_* or a tango_mra_rom_read error code */
+    uint8_t  no_md5_check;     /* a rom without zip="" whose md5 did not match: streamed without the check */
+    uint32_t size;             /* bytes to send (status TANGO_MRA_SEQ_SEND) */
+} tango_mra_seq_rom_t;
+
+typedef struct {
+    /* opens the archives of a <rom zip="a|b|c"> list, one slot per name in list order (an archive that is
+     * not on the card still takes its slot, left not open -- tango_mra_rom_read skips it); returns the slot
+     * count (at most TANGO_MRA_MAX_ZIPS) */
+    int  (*open)(void *ctx, const char *zip_list, tango_zip_t *zips[], const tango_zipfs_t *zip_ios[]);
+    void (*close)(void *ctx, tango_zip_t *zips[], const tango_zipfs_t *zip_ios[], int n);
+    void *ctx;
+} tango_mra_zips_t;
+
+typedef struct {
+    const tango_zipfs_t *mra_io;
+    const char *mra_path;      /* the caller's string: must outlive the sequence */
+    tango_mra_zips_t zcb;
+    tango_mra_rom_t rom;       /* the rom being planned or streamed */
+    tango_zip_t *zips[TANGO_MRA_MAX_ZIPS];
+    const tango_zipfs_t *zip_ios[TANGO_MRA_MAX_ZIPS];
+    int      n_zips;
+    int      rom_open;         /* rom (and its archives) open for streaming */
+    int      n;                /* plan[] entries */
+    int      cur;              /* the plan[] entry streamed now (or last), -1 = none yet */
+    tango_mra_seq_rom_t plan[TANGO_MRA_SEQ_MAX];
+} tango_mra_seq_t;
+
+/* called once per planned <rom> (and once for the first one past TANGO_MRA_SEQ_MAX), after its assembly:
+ * r->part_name / r->out_pos still say where an assembly stopped */
+typedef void (*tango_mra_seq_note_fn)(void *ctx, const tango_mra_seq_rom_t *e, const tango_mra_rom_t *r);
+
+/* Plans every top-level <rom> of the .mra at mra_path in document order (rules above), assembling each one
+ * through scratch (any size; 512 is plenty). Every file is closed again on return. Returns the number of roms
+ * to send, or -1 if the .mra does not open. */
+int tango_mra_seq_plan(tango_mra_seq_t *q, const tango_zipfs_t *mra_io, const char *mra_path,
+                       const tango_mra_zips_t *zcb, uint8_t *scratch, unsigned scratch_len,
+                       tango_mra_seq_note_fn note, void *note_ctx);
+
+/* Closes the rom streamed so far (if any) and opens the next plan[] entry with status TANGO_MRA_SEQ_SEND
+ * after q->cur for streaming: 1 = q->plan[q->cur] is open (its index and size are the download's), 0 = none
+ * left. An entry that no longer opens is marked -1 and skipped. */
+int tango_mra_seq_next(tango_mra_seq_t *q);
+
+/* tango_dl_pump's rd(): the open rom's next bytes (ctx = the tango_mra_seq_t); < 0 as tango_mra_rom_read */
+int tango_mra_seq_read(void *ctx, uint8_t *buf, unsigned n);
+
+/* Closes the rom being streamed and its archives (safe when none is open, and more than once). */
+void tango_mra_seq_close(tango_mra_seq_t *q);
+
+/* 1 if the plan has a <rom> with this index="" that is sent (status TANGO_MRA_SEQ_SEND), else 0. */
+int tango_mra_seq_has_data(const tango_mra_seq_t *q, uint8_t index);
+
+/* ------------------------------------------------------------------ a blank hi-score .nvm
+ *
+ * <rom index="3"> is the configuration of MiSTer's hiscore.v (the addresses of the game's score table): it must
+ * reach the core before the table can be read back or written. Saved through a firmware that never sent it, the
+ * <nvram> upload never followed ioctl_addr, and the saved .nvm is <nvram size=""> copies of one byte. Sending such
+ * a file writes that byte over the game's own table, and the next save keeps it. With a sent <rom index="3">, a
+ * saved .nvm whose bytes are all identical is therefore not sent and is removed (tango_fw.c's arc_setup). */
+#define TANGO_MRA_HISCORE_INDEX 3
+
+/* 1 if n > 0 and every one of the n bytes at p equals p[0], else 0 */
+int tango_mra_bytes_uniform(const uint8_t *p, uint32_t n);
 
 /* ------------------------------------------------------------------ <switches>/<cheats> (DIPs)
  *

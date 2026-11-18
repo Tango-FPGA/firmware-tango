@@ -164,7 +164,7 @@ static bool take_nums(uint32_t *d)
 }
 static const char *result_text(int r)
 {
-    return r == TANGO_LOAD_OK ? "DONE" : r == TANGO_LOAD_NOT_DONE ? "not DONE" : r == TANGO_LOAD_FAILED ? "failed" : "no file";
+    return r == TANGO_LOAD_OK ? "DONE" : r == TANGO_LOAD_NOT_DONE ? "not DONE" : r == TANGO_LOAD_FAILED ? "failed" : "not found";
 }
 static const char *how_text(int how)
 {
@@ -216,6 +216,12 @@ static bool card_ok;                      /* tentative declaration; the real one
  * needs and relies on -- see its own header comment for why the open is not done here with the mount
  * handed across. "" = nothing pending (the common case: no .mra, or a plain core). */
 static char mra_pending[REQ_PATH_MAX];
+/* Why tango_fw_boot's .mra resolution failed, for the launcher's "Could not load" text later in the same boot
+ * (task(), tango_load_fail_text): mra_fail_set = an .mra launch failed at resolve_mra with the card mounted,
+ * mra_fail_rbf = its <rbf> text ("" = none found). Plain RAM, like mra_pending: the note (HBN) carries the
+ * result and the name across an MCU reset, this does not, and the text then falls back to "core not found". */
+static bool mra_fail_set;
+static char mra_fail_rbf[TANGO_MRA_RBF_MAX];
 static void save_request(const char *path)
 {
     /* the card is already mounted here (called only from the launcher task, which holds it) */
@@ -706,10 +712,9 @@ static void task(void *p)
         int res; uint32_t st[3]; char what[NOTE_TEXT_MAX + 1], msg[112];
         if (take_note(&res, st, what, sizeof what) && (res != NOTE_IN_PROGRESS || booted_warm)) {   /* the last launch failed */
             if (res == NOTE_IN_PROGRESS) snprintf(msg, sizeof msg, "%s (cut short by an MCU reset)", what);
-            else if (res == TANGO_LOAD_NOT_DONE)    /* the Gowin status register: after the reload, erase, write */
-                snprintf(msg, sizeof msg, "%s: not DONE  R %08lx E %08lx W %08lx", what,
-                         (unsigned long)st[1], (unsigned long)st[2], (unsigned long)st[0]);
-            else snprintf(msg, sizeof msg, "%s: upload failed  R %08lx E %08lx", what, (unsigned long)st[1], (unsigned long)st[2]);
+            else    /* the Gowin status words for an upload; for a core never found, the .mra's <rbf> when known */
+                tango_load_fail_text(msg, sizeof msg, what, res, st,
+                                     res == TANGO_LOAD_NOT_FOUND && mra_fail_set ? mra_fail_rbf : NULL);
             tango_debugf("last launch: %s", msg);
             /* the load records: this boot's power-up load and the failed launch */
             uint32_t rec_lau[REC_WORDS] = { 0 };
@@ -810,8 +815,8 @@ static tango_dl_t DL;
 static FIL dl_fil;
 static bool dl_file_open = false;
 static bool dl_is_zip = false;             /* the current download's source is CM.zip (tango_zip_read), not dl_fil */
-static bool dl_is_mra = false;             /* the source is mra_rom (tango_mra_rom_read),
-                                             * an auto-started .mra rom index 0, not dl_fil or CM.zip */
+static bool dl_is_mra = false;             /* the source is mra_s->seq (tango_mra_seq_read),
+                                             * one <rom> of an auto-started .mra, not dl_fil or CM.zip */
 
 static int c_dir_exists(void *c, const char *path)
 {
@@ -920,14 +925,21 @@ static int resolve_mra(const char *req, char *out, int cap)
     const char *rel = !strncmp(req, "/sd/", 4) ? req + 4 : req;   /* zfs_open/fs_open each add "/sd/" back */
     char rbf[TANGO_MRA_RBF_MAX] = "", core_name[TANGO_PATH_MAX] = "";
     card_take();
-    int ok = card_ok && tango_mra_find_rbf(&zipfs, rel, rbf, sizeof rbf) &&
-             tango_mra_resolve_core(&card, "_Arcade/cores", rbf, core_name, sizeof core_name);
+    bool mounted = card_ok;
+    int have_rbf = mounted && tango_mra_find_rbf(&zipfs, rel, rbf, sizeof rbf);
+    int ok = have_rbf && tango_mra_resolve_core(&card, "_Arcade/cores", rbf, core_name, sizeof core_name);
     card_release();
     if (ok) {
         snprintf(out, (size_t)cap, "/sd/_Arcade/cores/%s", core_name);
         tango_debugf("mra: %s -> rbf \"%s\" -> %s", rel, rbf, out);
+        return 1;
     }
-    return ok;
+    mra_fail_set = mounted;
+    strncpy(mra_fail_rbf, have_rbf ? rbf : "", sizeof mra_fail_rbf - 1); mra_fail_rbf[sizeof mra_fail_rbf - 1] = 0;
+    if (!mounted) tango_debugf("mra: %s: the card did not mount", rel);
+    else if (!have_rbf) tango_debugf("mra: %s: no <rbf> found in the file", rel);
+    else tango_debugf("mra: %s -> rbf \"%s\": no matching core in _Arcade/cores", rel, rbf);
+    return 0;
 }
 
 /* ------------------------------------------------------------------ The .mra
@@ -935,12 +947,13 @@ static int resolve_mra(const char *req, char *out, int cap)
  * open AT ONCE (its own doc: "zips[]/zip_ios[] must already be opened" by the caller, tried per-part in
  * MiSTer's own fallback order) -- separate from zip_fil/zipfs (CM's own, console-zip Files browsing, one
  * archive at a time) and dl_fil (plain F downloads), since those are each scoped to one file/archive.
+ * tango_mra_seq_t (tango_mra.h) opens them, through mra_zips_open/mra_zips_close, for one <rom> at a time.
  *
- * All of it (the .mra's own FIL, up to TANGO_MRA_MAX_ZIPS zip FILs/tango_zip_t's, and the tango_mra_rom_t
+ * All of it (the .mra's own FIL, up to TANGO_MRA_MAX_ZIPS zip FILs/tango_zip_t's, and the tango_mra_seq_t
  * state) lives in ONE malloc'd block, allocated only while an auto-started .mra download is actually in
- * flight and freed the moment it ends (dl_close(), or any failure path below) -- NOT static .bss, which
- * would sit in RAM permanently whether or not an arcade core is ever loaded (see the comment on VP:
- * "MEMORY: no static buffers").
+ * flight and freed the moment the last of its <rom> downloads ends (dl_close(), or any failure path below)
+ * -- NOT static .bss, which would sit in RAM permanently whether or not an arcade core is ever loaded (see
+ * the comment on VP: "MEMORY: no static buffers").
  *
  * Heap margin: with a full scan table in each tango_zip_t this struct measures ~22 KB (tango_zip_t at
  * 3944 bytes * 4, tango_mra_rom_t 3608, five FILs at ~550 each) -- with a core built with
@@ -953,7 +966,7 @@ static int resolve_mra(const char *req, char *out, int cap)
  * tango_zip_locate, which needs exactly one entry). That table is reached through each tango_zip_t's own
  * `cache` pointer (tango_zip.h) -- this struct's 4 zip[] instances share ONE of their own
  * (`mra_zip_cache`, below), not tango_zip.c's own single global default, which tango_coremenu.h's CM.zip
- * uses: this struct's own ROM-0 download can still be streaming in the background while the OSD lets
+ * uses: this struct's own ROM download can still be streaming in the background while the OSD lets
  * the user browse Files through CM.zip at the same time, and sharing one table between the two would
  * let either corrupt the other's scan/locate result (tango_zip.h's own header comment has the full case).
  * Net effect: ~9.9 KB off this struct (4 copies of tango_zip_t's own 3320-byte table collapse to 1,
@@ -963,15 +976,16 @@ typedef struct {
     tango_zipfs_t mra_io;
     FIL           mra_fil;
     bool          mra_fil_open;
-    tango_mra_rom_t rom;                      /* reused as-is for both the sizing pass and the real pass
-                                                * (tango_mra_rom_open's own memset resets it fully) */
-    int           n_zips;
-    tango_zip_cache_t mra_zip_cache;          /* shared by every zip[] slot below (mra_open_zips wires
+    tango_mra_seq_t seq;                      /* the plan of every <rom> and the one being streamed (its
+                                                * tango_mra_rom_t, its zips[]/zip_ios[] pointers into
+                                                * zip[]/zip_io[] below) */
+    int           n_zips;                     /* zip[] slots mra_zips_open filled for the current <rom> */
+    tango_zip_cache_t mra_zip_cache;          /* shared by every zip[] slot below (mra_open_one_zip wires
                                                 * each one's own .cache at it) -- open_file_part only
                                                 * ever has ONE of them actively scanning/locating at a
                                                 * time, so one table does for all 4; deliberately NOT
                                                 * tango_zip.c's own global default (CM.zip's own table),
-                                                * since a core's .mra ROM-0 download can still be
+                                                * since a core's .mra ROM download can still be
                                                 * streaming in the background while the OSD lets the
                                                 * user browse Files through CM.zip -- sharing the SAME
                                                 * table with that would let one corrupt the other
@@ -980,11 +994,12 @@ typedef struct {
     tango_zipfs_t zip_io[TANGO_MRA_MAX_ZIPS];
     FIL           zip_fil[TANGO_MRA_MAX_ZIPS];
     bool          zip_fil_open[TANGO_MRA_MAX_ZIPS];
-    tango_zip_t  *zips_p[TANGO_MRA_MAX_ZIPS];
-    const tango_zipfs_t *zip_ios_p[TANGO_MRA_MAX_ZIPS];
 } mra_session_t;
 static mra_session_t *mra_s = NULL;           /* NULL = no .mra auto-download in flight (also dl_is_mra's
                                                 * own backing: the two are always set/cleared together) */
+/* the launched .mra's plan sends a <rom index="3"> (tango_mra.h TANGO_MRA_HISCORE_INDEX): set by mra_autostart()
+ * from the plan, which is freed before arc_setup() runs; arc_setup() then drops a blank saved .nvm */
+static bool arc_hiscore = false;
 
 static int mra_mfs_open(void *c, const char *path, uint32_t *size)
 {
@@ -1037,6 +1052,9 @@ static int mra_open_one_zip(const char *name, int i)
 {
     mra_s->zip_io[i] = (tango_zipfs_t){ mra_zfs_open, mra_zfs_read, mra_zfs_close, (void *)(intptr_t)i };
     memset(&mra_s->zip[i], 0, sizeof mra_s->zip[i]);
+    mra_s->zip[i].cache = &mra_s->mra_zip_cache;   /* after the clear, before any open_archive call: the
+        * session's own matching-entry table, never tango_zip.c's default (CM.zip's, the OSD's Files
+        * browser); tango_zip_close() (open_archive's own first step) keeps it from here on */
     char p[TANGO_PATH_MAX];
     if (name[0] == '/') { snprintf(p, sizeof p, "%s", name + 1); return tango_zip_open_archive(&mra_s->zip[i], &mra_s->zip_io[i], p); }
     snprintf(p, sizeof p, "games/mame/%s", name);
@@ -1045,68 +1063,110 @@ static int mra_open_one_zip(const char *name, int i)
     return tango_zip_open_archive(&mra_s->zip[i], &mra_s->zip_io[i], p);
 }
 
-/* Splits out_zip ("a|b|c", up to TANGO_MRA_MAX_ZIPS names -- tango_mra_rom_open already capped it to
- * TANGO_MRA_ZIP_NAME_MAX) and opens each candidate archive, same shape test_mra_real.c's own helper
- * already proved against the real Galaga romset: a name that fails at both paths is left "not open"
+/* tango_mra_zips_t.open: splits a <rom zip="a|b|c"> list (up to TANGO_MRA_MAX_ZIPS names -- tango_mra.c
+ * already capped it to TANGO_MRA_ZIP_NAME_MAX) and opens each candidate archive, same shape test_mra_real.c's
+ * own helper already proved against the real Galaga romset: a name that fails at both paths is left "not open"
  * (tango_zip_t.open stays 0) but still counted and passed to tango_mra_rom_read, which treats that exactly
- * like a present-but-corrupt or absent fallback -- not fatal. "" (no zip at all, e.g. an inline-only rom)
- * opens nothing: n_zips stays 0, zips[]/zip_ios[] are never dereferenced for an inline part. */
-static void mra_open_zips(const char *out_zip)
+ * like a present-but-corrupt or absent fallback -- not fatal. Only called for a non-empty list (a <rom>
+ * without zip="", e.g. an inline-only one, opens nothing). */
+static int mra_zips_open(void *c, const char *zip_list, tango_zip_t *zips[], const tango_zipfs_t *zip_ios[])
 {
-    for (int i = 0; i < TANGO_MRA_MAX_ZIPS; i++) {
-        mra_s->zips_p[i] = &mra_s->zip[i]; mra_s->zip_ios_p[i] = &mra_s->zip_io[i];
-        mra_s->zip[i].cache = &mra_s->mra_zip_cache;   /* before any open_archive call touches it below --
-            * tango_zip_close() (open_archive's own first step) preserves whatever .cache already is, it
-            * does not establish it the first time */
-    }
+    (void)c;
+    for (int i = 0; i < TANGO_MRA_MAX_ZIPS; i++) { zips[i] = &mra_s->zip[i]; zip_ios[i] = &mra_s->zip_io[i]; }
     mra_s->n_zips = 0;
-    char list[TANGO_MRA_ZIP_NAME_MAX]; strncpy(list, out_zip, sizeof list - 1); list[sizeof list - 1] = 0;
+    char list[TANGO_MRA_ZIP_NAME_MAX]; strncpy(list, zip_list, sizeof list - 1); list[sizeof list - 1] = 0;
     char *cur = list;
     while (*cur && mra_s->n_zips < TANGO_MRA_MAX_ZIPS) {
         char *bar = strchr(cur, '|');
         if (bar) *bar = 0;
         int ok = mra_open_one_zip(cur, mra_s->n_zips);
-        tango_debugf("mra: zip \"%s\" %s", cur, ok ? "opened" : "did not open (fine if unused by this romset)");
+        tango_debugf("mra: zip \"%s\" %s, %s", cur, ok ? "opened" : "did not open (fine if unused by this romset)",
+                     mra_s->zip[mra_s->n_zips].cache == &mra_s->mra_zip_cache ? "session table" : "DEFAULT TABLE (shared with CM.zip)");
         mra_s->n_zips++;
         if (!bar) break;
         cur = bar + 1;
     }
+    return mra_s->n_zips;
 }
 
-static void mra_close_zips(void)
+static void mra_zips_close(void *c, tango_zip_t *zips[], const tango_zipfs_t *zip_ios[], int n)
 {
+    (void)c; (void)zips; (void)zip_ios; (void)n;
     for (int i = 0; i < mra_s->n_zips; i++) tango_zip_close(&mra_s->zip[i], &mra_s->zip_io[i]);
     mra_s->n_zips = 0;
 }
 
 static void dl_close(void);   /* defined below mra_autostart; mra_autostart's own stale-state guard needs it */
 
+/* tango_mra_seq_plan's per-<rom> report: what will be sent, or why a <rom> is not */
+static void mra_note(void *c, const tango_mra_seq_rom_t *e, const tango_mra_rom_t *r)
+{
+    const char *rel = c;
+    const char *why =
+        e->status == TANGO_MRA_SEQ_SEND ? NULL :
+        e->status == TANGO_MRA_SEQ_EMPTY ? "no data" :
+        e->status == TANGO_MRA_SEQ_SUPPRESSED ? "an earlier rom 0 matched its md5" :
+        e->status == TANGO_MRA_SEQ_OVER_CAP ? "more <rom> tags than TANGO_MRA_SEQ_MAX: this one and the rest" :
+        e->status == TANGO_MRA_REFUSED ? "refused (interleave, a part-level zip override, or too many patches)" :
+        e->status == TANGO_MRA_MD5_MISMATCH ? "md5 mismatch (discarded before sending, same as MiSTer)" :
+        "I/O or parse error";
+    if (!why)
+        tango_debugf("mra: %s <rom> #%u index %u: %lu bytes%s", rel, (unsigned)e->ordinal, (unsigned)e->index,
+                     (unsigned long)e->size, e->no_md5_check ? " (no zip: md5 not enforced, as MiSTer)" : "");
+    else
+        /* part_name/out_pos survive tango_mra_rom_close() (it does no memset) -- on a hardware-only
+         * failure (OOM in tango_zip_open_member's own malloc for a deflated member, a FatFs open-file-limit
+         * refusal, a zip missing from the card) the assembly's own "I/O or parse error" catch-all would
+         * otherwise say nothing about WHERE it happened; open_file_part's own per-zip fallback loop
+         * (tango_mra.c) treats any such failure identically to "not in this zip", so the part name/offset
+         * here is the only way to tell "OOM, FatFs limit, or genuinely absent" apart after the fact. */
+        tango_debugf("mra: %s <rom> #%u index %u: %s (stopped at part \"%s\", %lu bytes assembled) -- not sent",
+                     rel, (unsigned)e->ordinal, (unsigned)e->index, why, r->part_name, (unsigned long)r->out_pos);
+}
+
+/* Opens the next <rom> of mra_s's plan and starts its download (ioctl index = its index=""). false = none left
+ * (or none of the remaining ones would start): the caller ends the session. */
+static bool mra_send_next(void)
+{
+    while (tango_mra_seq_next(&mra_s->seq)) {
+        const tango_mra_seq_rom_t *e = &mra_s->seq.plan[mra_s->seq.cur];
+        if (tango_dl_begin(&DL, &link, e->index, e->size) == 0) {
+            DL.before_end = NULL; DL.end_ctx = NULL;
+            tango_debugf("mra: sending <rom> #%u: %lu bytes, index %u", (unsigned)e->ordinal, (unsigned long)e->size,
+                         (unsigned)e->index);
+            return true;
+        }
+        tango_debugf("mra: tango_dl_begin failed for <rom> #%u (%lu bytes)", (unsigned)e->ordinal, (unsigned long)e->size);
+    }
+    tango_mra_seq_close(&mra_s->seq);
+    return false;
+}
+
 /* The .mra ROM auto-trigger -- MiSTer's xml_load()/arcade_send_rom() equivalent
  * (mra_loader.cpp 1207-1233, 1048-1094), carried across app_restart(). The ORIGINAL .mra's path (already
  * resolved to a bitstream path earlier by resolve_mra -- that resolution's own card_take()/card_release()
- * pair is long done) is parsed a second time, this time for its <rom index="0"> (MiSTer's own convention:
- * each <rom index="N"> sends ioctl_index = N as one byte, mra_loader.cpp:326's user_io_set_index(romindex);
- * the first/primary ROM is always index 0), and its bytes start flowing to the just-loaded core over the
- * SAME ioctl_download/SDC_IMAGE mechanism every plain F download already uses -- dl_step's dl_read_mra
- * leaf (below) keeps pumping it on every later SDC interrupt, exactly like any other in-progress download.
- * Only rom index 0 is sent: a real multi-rom core (e.g. Galaga's own mod-byte roms at index 3 and 4) needs
- * more auto-trigger calls than this, which are not built here.
+ * pair is long done) is parsed a second time, this time for its <rom> tags: MiSTer's xml_send_rom sends every
+ * <rom index="N"> in document order, each as its own download with ioctl_index = N (rom_finish,
+ * mra_loader.cpp:326's user_io_set_index(romindex)) -- the main ROM at 0, a game-select byte at 1, a hi-score
+ * configuration at 3, ... (tango_mra.h's tango_mra_seq_t has the rules: empty roms, md5, a second rom 0). The
+ * bytes flow to the just-loaded core over the SAME ioctl_download/SDC_IMAGE mechanism every plain F download
+ * already uses -- dl_step's dl_read_mra leaf (below) keeps pumping it on every later SDC interrupt, exactly
+ * like any other in-progress download, and dl_step starts the next <rom> (mra_send_next) when one completes.
  *
  * Two passes, not one, because tango_dl_begin's own SELECT needs the exact total size up front (the real
  * wire protocol, not a Tango choice) and tango_mra_rom_read has no way to report that without actually
- * producing every byte (it streams rather than buffers: the total length is never known up front, like
- * MiSTer's own rolling romlen[]). Pass 1 streams the whole assembly into a throwaway
- * buffer just to count it -- and, for free, runs the real md5 check BEFORE any byte ever reaches the FPGA:
- * since tango_dl_begin/SELECT hasn't happened yet at that point, a REFUSED or MD5_MISMATCH result here
- * means nothing was ever sent, exactly MiSTer's own "discard, don't send" rule (rom_finish), not a
- * deviation from it. Pass 2 re-opens the same .mra fresh (tango_mra_rom_open resets all per-rom state,
- * reusing the SAME tango_mra_rom_t -- its own memset makes that safe) and feeds the real tango_dl_begin/
- * dl_step pump. Because pass 1 already validated the exact byte count and the md5, pass 2's own read
- * calls should never actually reach "done" (tango_dl_pump's own d->sent>=d->size check ends the download
- * one call earlier) or hit a fresh md5 mismatch -- dl_read_mra's own handling of those two codes is a
- * defensive backstop for a source that changed between the two passes, not a path this normally exercises.
- * The zip archives pass 1 opened are reused as-is for pass 2 (re-opening them would just re-read the same
- * central directory for no benefit).
+ * producing every byte (it streams rather than buffers: the total length is never
+ * known up front, like MiSTer's own rolling romlen[]). Pass 1 (tango_mra_seq_plan, here) assembles every
+ * <rom> into a throwaway buffer just to count it -- and, for free, runs the real md5 check BEFORE any byte
+ * ever reaches the FPGA: a REFUSED or MD5_MISMATCH result means nothing of that rom is ever sent, exactly
+ * MiSTer's own "discard, don't send" rule (rom_finish), not a deviation from it. All of pass 1 runs here, in
+ * core_task's own start-up, not in dl_step: dl_step runs while com_task waits (at most 1 s) on dl_sem for it,
+ * and assembling a deflated ROM takes too long for that. Pass 2 re-opens each sendable rom fresh
+ * (tango_mra_seq_next) and feeds the real tango_dl_begin/dl_step pump. Because pass 1 already validated the
+ * exact byte count and the md5, pass 2's own read calls should never actually reach "done" (tango_dl_pump's
+ * own d->sent>=d->size check ends the download one call earlier) or hit a fresh md5 mismatch --
+ * dl_read_mra's own handling of those two codes is a defensive backstop for a source that changed between
+ * the two passes, not a path this normally exercises.
  *
  * Card-mount lifecycle: called from core_task() (below), AFTER its own card_take()/tango_core_init()/
  * vp_start() -- not from tango_fw_boot, where the .mra path is first noticed. tango_fw_boot runs well
@@ -1122,10 +1182,14 @@ static void dl_close(void);   /* defined below mra_autostart; mra_autostart's ow
  * one caller. Calling this from core_task() instead, after ITS card_take() has already run, needs no
  * special-casing anywhere: this function never touches card_take()/card_release() at all, the same as
  * every other core_task()-side file access (c_load_file, pm_load, ...). tango_fw_boot only ever records
- * the path (mra_pending, near REQ_PATH_MAX) for core_task() to pick up once its own mount is live. */
-static void mra_autostart(const char *req)
+ * the path (mra_pending, near REQ_PATH_MAX) for core_task() to pick up once its own mount is live.
+ *
+ * rel: the .mra's path without "/sd/" (arc_mra_path: tango_mra_seq_t keeps the pointer for the whole
+ * session, so it must be a string that outlives it). */
+static void mra_autostart(const char *rel)
 {
-    const char *rel = !strncmp(req, "/sd/", 4) ? req + 4 : req;   /* mra_mfs_open/fs_open each add "/sd/" back */
+    if (dl_file_open || dl_is_zip || dl_is_mra) { tango_dl_end(&DL); dl_close(); }   /* stale state from an earlier core */
+    arc_hiscore = false;
 
     mra_session_t *s = malloc(sizeof *s);
     if (!s) { tango_debugf("mra autostart: out of memory (%u bytes)", (unsigned)sizeof *s); return; }
@@ -1133,80 +1197,30 @@ static void mra_autostart(const char *req)
     mra_s = s;
     s->mra_io = (tango_zipfs_t){ mra_mfs_open, mra_mfs_read, mra_mfs_close, NULL };
 
-    char zipname[TANGO_MRA_ZIP_NAME_MAX];
-    if (!tango_mra_rom_open(&s->rom, &s->mra_io, rel, 0, zipname, sizeof zipname)) {
-        tango_debugf("mra autostart: %s would not open", rel);
-        free(s); mra_s = NULL;
-        return;
-    }
-    if (!s->rom.found) {
-        tango_debugf("mra autostart: %s declares no <rom index=\"0\">: nothing to send", rel);
-        s->mra_io.close(s->mra_io.ctx);
-        free(s); mra_s = NULL;
-        return;
-    }
-    mra_open_zips(zipname);
-
     static uint8_t scratch[512];
-    uint32_t total = 0; int got = -1;
-    for (;;) {
-        got = tango_mra_rom_read(&s->rom, &s->mra_io, s->zips_p, s->zip_ios_p, s->n_zips, scratch, sizeof scratch);
-        if (got <= 0) break;
-        total += (uint32_t)got;
-    }
-    tango_mra_rom_close(&s->rom, &s->mra_io, s->zips_p, s->zip_ios_p);
-    if (got < 0) {
-        /* part_name/out_pos survive tango_mra_rom_close() just above (it does no memset) -- on a
-         * hardware-only failure (OOM in tango_zip_open_member's own malloc for a deflated member, a FatFs
-         * open-file-limit refusal, a zip missing from the card) this sizing pass's own "I/O or parse
-         * error" catch-all would otherwise say nothing about WHERE it happened; open_file_part's own
-         * per-zip fallback loop (tango_mra.c) treats any such failure identically to "not in this zip",
-         * so the part name/offset here is the only way to tell "OOM, FatFs limit, or genuinely absent"
-         * apart after the fact, from the board's debug console. */
-        tango_debugf("mra autostart: %s: %s (stopped at part \"%s\", %lu bytes assembled) -- not sending", rel,
-                     got == TANGO_MRA_REFUSED ? "refused (interleave, a part-level zip override, or too many patches)" :
-                     got == TANGO_MRA_MD5_MISMATCH ? "md5 mismatch (discarded before sending, same as MiSTer)" :
-                     "I/O or parse error", s->rom.part_name, (unsigned long)s->rom.out_pos);
-        mra_close_zips(); free(s); mra_s = NULL;
-        return;
-    }
-    if (total == 0) {
-        tango_debugf("mra autostart: %s rom 0 is empty: nothing to send", rel);
-        mra_close_zips(); free(s); mra_s = NULL;
-        return;
-    }
-
-    if (!tango_mra_rom_open(&s->rom, &s->mra_io, rel, 0, NULL, 0) || !s->rom.found) {
-        tango_debugf("mra autostart: %s: rom 0 vanished between passes", rel);
-        mra_close_zips(); free(s); mra_s = NULL;
-        return;
-    }
-    if (dl_file_open || dl_is_zip || dl_is_mra) { tango_dl_end(&DL); dl_close(); }   /* stale state from an earlier core */
-    if (tango_dl_begin(&DL, &link, 0, total) != 0) {
-        tango_debugf("mra autostart: tango_dl_begin failed (%lu bytes)", (unsigned long)total);
-        tango_mra_rom_close(&s->rom, &s->mra_io, s->zips_p, s->zip_ios_p);
-        mra_close_zips(); free(s); mra_s = NULL;
-        return;
-    }
+    const tango_mra_zips_t zcb = { mra_zips_open, mra_zips_close, NULL };
+    int n = tango_mra_seq_plan(&s->seq, &s->mra_io, rel, &zcb, scratch, sizeof scratch, mra_note, (void *)rel);
+    arc_hiscore = n > 0 && tango_mra_seq_has_data(&s->seq, TANGO_MRA_HISCORE_INDEX);
+    if (n < 0) tango_debugf("mra autostart: %s would not open", rel);
+    else if (!n) tango_debugf("mra autostart: %s: no <rom> to send", rel);
+    if (n <= 0 || !mra_send_next()) { free(s); mra_s = NULL; return; }
     dl_is_mra = true;
-    DL.before_end = NULL; DL.end_ctx = NULL;
-    tango_debugf("mra autostart: %s rom 0: %lu bytes, index 0", rel, (unsigned long)total);
 }
 
 static int dl_read_mra(void *c, uint8_t *b, unsigned n)
 {
     (void)c;
-    int got = tango_mra_rom_read(&mra_s->rom, &mra_s->mra_io, mra_s->zips_p, mra_s->zip_ios_p, mra_s->n_zips, b, n);
+    int got = tango_mra_seq_read(&mra_s->seq, b, n);
     if (got < 0)
-        /* same reasoning as mra_autostart's own sizing-pass failure log above: the real streaming pass
-         * (this function) is what a mid-transfer board failure -- OOM, a FatFs limit, the card going
-         * away -- would hit, after the sizing pass already succeeded; part_name/out_pos (mra_s->rom's,
-         * not yet closed here) say where this pass itself stopped, which the generic "I/O or parse
-         * error" text alone cannot distinguish from the sizing pass's own report. */
+        /* same reasoning as mra_note's own failure log above: the real streaming pass (this function) is
+         * what a mid-transfer board failure -- OOM, a FatFs limit, the card going away -- would hit, after
+         * the sizing pass already succeeded; part_name/out_pos (the rom's, not yet closed here) say where
+         * this pass itself stopped, which the generic "I/O or parse error" text alone cannot distinguish
+         * from the sizing pass's own report. */
         tango_debugf("mra rom read: %s (stopped at part \"%s\", %lu bytes already sent)",
                       got == TANGO_MRA_REFUSED ? "refused (interleave/zip override/too many patches)" :
                       got == TANGO_MRA_MD5_MISMATCH ? "md5 mismatch" : "I/O or parse error",
-                      mra_s->rom.part_name, (unsigned long)mra_s->rom.out_pos);
+                      mra_s->seq.rom.part_name, (unsigned long)mra_s->seq.rom.out_pos);
     return got;
 }
 
@@ -1252,7 +1266,7 @@ static bool     arc_pending_setup = false;    /* an .mra launched this core; arc
                                                 * mechanism at a new index would otherwise collide with it) */
 static bool     vp_pending = false;           /* heap margin: the SAME
                                                 * shape as arc_pending_setup, just for vp_start() instead
-                                                * of arc_setup() -- set in core_task() only when the ROM-0
+                                                * of arc_setup() -- set in core_task() only when the ROM
                                                 * auto-download genuinely started (dl_is_mra true), cleared
                                                 * and acted on by dl_close()'s own mra branch once that
                                                 * download's real streaming pass has fully closed, win or
@@ -1408,9 +1422,9 @@ static bool arc_setup_one(int cheats, const char *dir, const char *suffix, uint8
 }
 
 /* Called once the .mra ROM auto-download (if one started: mra_autostart() succeeded) has fully closed --
- * its own SELECT(0) already on the wire, DL/dl_is_mra idle again (see arc_pending_setup's own comment for
- * why this must wait) -- or once it's clear none was ever started at all (refused/empty/not found/no
- * <rom index="0">: still fine, DIP/cheat/NVRAM are independent of ROM assembly succeeding, exactly as
+ * its last <rom>'s SELECT(0) already on the wire, DL/dl_is_mra idle again (see arc_pending_setup's own
+ * comment for why this must wait) -- or once it's clear none was ever started at all (refused/empty/not
+ * found/no <rom> with data: still fine, DIP/cheat/NVRAM are independent of ROM assembly succeeding, exactly as
  * MiSTer's own arcade_send_rom runs the DIP send unconditionally at its own end regardless of how the ROM
  * itself went). DIP/cheat: arc_setup_one's own doc comment above. NVRAM: load-and-send ONLY if a saved file
  * exists (arcade_nvm_load's own `if (FileLoadConfig(...))` guard -- MiSTer sends nothing at all, leaving
@@ -1445,7 +1459,18 @@ static void arc_setup(void)
             char nm[TANGO_ARC_NAME_MAX + 8];
             if (!nvbuf) { tango_debugf("arcade: NVRAM: out of memory (%d bytes)", arc_misc.nvram_size); return; }
             arc_filename(nm, sizeof nm, ".nvm");
-            if (arc_load_blob("nvram", nm, nvbuf, (uint32_t)arc_misc.nvram_size)) {
+            bool loaded = arc_load_blob("nvram", nm, nvbuf, (uint32_t)arc_misc.nvram_size);
+            if (loaded && arc_hiscore && tango_mra_bytes_uniform(nvbuf, (uint32_t)arc_misc.nvram_size)) {
+                /* a blank hi-score table (tango_mra.h, TANGO_MRA_HISCORE_INDEX): not sent, removed -- nothing of
+                 * value on disk, so arc_nvram_ok stays true and the next save writes the core's real table */
+                char p[96]; snprintf(p, sizeof p, "/sd/config/nvram/%s", nm);
+                FRESULT ur = f_unlink(p);
+                tango_debugf("arcade: %s: all %d bytes are %02X with a hi-score <rom index=\"%d\">: not sent, removed (%s)",
+                             p, arc_misc.nvram_size, (unsigned)nvbuf[0], TANGO_MRA_HISCORE_INDEX,
+                             ur == FR_OK ? "ok" : "unlink failed");
+                loaded = false;
+            }
+            if (loaded) {
                 /* a real saved file exists: the core must actually receive it before arc_save_nvram() is
                  * ever allowed to read the core back and overwrite that same file -- arc_nvram_ok stays
                  * true ONLY if the send genuinely happens and succeeds (never just because a send was
@@ -1541,14 +1566,15 @@ static void dl_close(void)
      * whole archive -- not just the member -- can come down now, not just whenever the user next opens Files */
     if (dl_is_zip) { tango_zip_close(&CM.zip, &zipfs); CM.in_zip = 0; dl_is_zip = false; }
     else if (dl_file_open) { f_close(&dl_fil); dl_file_open = false; }
-    else if (dl_is_mra) {                       /* the auto-started .mra session */
-        tango_mra_rom_close(&mra_s->rom, &mra_s->mra_io, mra_s->zips_p, mra_s->zip_ios_p);
-        mra_close_zips();
+    else if (dl_is_mra) {                       /* the auto-started .mra session --
+                                                 * its last <rom>, or a teardown mid-sequence: the roms not
+                                                 * yet sent are dropped (dl_step alone starts the next one) */
+        tango_mra_seq_close(&mra_s->seq);
         free(mra_s); mra_s = NULL;
         dl_is_mra = false;
-        /* heap margin: the ROM-0 download's own real streaming pass
-         * (not just the sizing dry-run inside mra_autostart()) has now fully closed, win or lose --
-         * dl_step() calls this on both "done" and "FAILED" -- so this is the first safe moment to give
+        /* heap margin: the .mra's <rom> downloads' own real streaming
+         * pass (not just the sizing dry-run inside mra_autostart()) has now fully closed, win or lose --
+         * dl_step() calls this after the last one is "done", or on "FAILED" -- so this is the first safe moment to give
          * vp_start() its own ~16.5 KB tango_vproc_t back, the same reasoning core_task()'s own comment
          * on vp_pending has in full. Runs before arc_setup() below, the same relative order as for a
          * core whose vp_start() is not deferred. */
@@ -1680,6 +1706,10 @@ static void dl_step(void)
     int r = tango_dl_pump(&DL, dl_is_mra ? dl_read_mra : dl_is_zip ? dl_read_zip : dl_read, NULL);
     if (r != 1) {
         tango_debugf("download %s: %lu of %lu bytes", r == 0 ? "done" : "FAILED", (unsigned long)DL.sent, (unsigned long)DL.size);
+        /* an .mra's <rom> completed (tango_dl_pump has sent its SELECT close): the next <rom> of the plan, as
+         * MiSTer's loader sends one after the other. Only here, never in dl_close(), which is also every
+         * teardown's path (c_load_file, c_reboot, ...). A failed one ends the sequence. */
+        if (r == 0 && dl_is_mra && mra_send_next()) return;
         dl_close();
     }
 }
@@ -2205,12 +2235,12 @@ static void core_task(void *p)
     tango_core_init(&CM, &link, &L.osd, &L.br, &cplat, core_conf, have_cfg ? cfg : NULL);
     /* Heap margin (together with the mra_session_t zip-cache sharing elsewhere in this file):
      * vp_start()'s own ~16.5 KB tango_vproc_t (for a core with
-     * TANGO_VIDEO_PROC=1, e.g. Galaga) must not be resident THROUGH the whole .mra ROM-0
+     * TANGO_VIDEO_PROC=1, e.g. Galaga) must not be resident THROUGH the whole .mra ROM
      * auto-download below -- with it, the first deflated part's own 32 KB inflate window fails.
      * Calling it after the mra_pending block below is not enough: mra_autostart() only runs the
      * SIZING pass synchronously; the real streaming pass runs later, via dl_step() on each SDC
      * interrupt, well after this function returns. So this mirrors arc_pending_setup's own
-     * pattern: if the ROM-0
+     * pattern: if the ROM
      * download actually started (dl_is_mra true after mra_autostart()), defer vp_start() all the way to
      * dl_close()'s own mra branch (below, after the session is fully torn down, win or lose) via
      * vp_pending; otherwise (no .mra, or nothing to send) call it immediately. */
@@ -2242,16 +2272,16 @@ static void core_task(void *p)
         if ((int)blen >= cap) blen = (size_t)cap - 1;
         memcpy(dst, base, blen); dst[blen] = 0;
         arc_pending_setup = true;
-        mra_autostart(mra_pending);
+        mra_autostart(arc_mra_path);
         mra_pending[0] = 0;
-        /* no ROM auto-download ever started (refused/empty/not found/no <rom index="0">): dl_is_mra never
+        /* no ROM auto-download ever started (refused/empty/not found/no <rom> with data): dl_is_mra never
          * became true, so dl_close()'s own arc_setup hook will never run for this core -- do it here instead,
          * synchronously, right now (DL is guaranteed idle: nothing above ever opened it). If one DID
          * start, dl_is_mra is true here and this is deliberately skipped -- dl_close() picks it up once
-         * that session's own SELECT(0) is actually on the wire (see arc_pending_setup's own comment). */
+         * the last <rom>'s own SELECT(0) is actually on the wire (see arc_pending_setup's own comment). */
         if (arc_pending_setup && !dl_is_mra) { arc_pending_setup = false; arc_setup(); }
-        /* vp_pending's own counterpart to the vp_start() skipped above: if the ROM-0 download genuinely
-         * started, defer to dl_close(); otherwise (refused/empty/not found/no <rom index="0">, or
+        /* vp_pending's own counterpart to the vp_start() skipped above: if the ROM download genuinely
+         * started, defer to dl_close(); otherwise (refused/empty/not found/no <rom> with data, or
          * mra_autostart() itself never even opened), there is nothing to wait for -- call it now, the
          * same place a plain console core already gets it. */
         if (dl_is_mra) vp_pending = true; else vp_start();
@@ -2278,7 +2308,7 @@ static void core_task(void *p)
      * apart -- skipping tango_core_toggle()/sync_osd() entirely here means `launched` never turns into
      * an open OSD for this core at all (tango_core_toggle_how()'s own body does nothing but flip
      * cm->mode and redraw, so skipping it has no side effect beyond the OSD staying closed).
-     * Applies regardless of whether the ROM-0 auto-download itself
+     * Applies regardless of whether the ROM auto-download itself
      * succeeds, fails, or was empty/refused: the rule is about arcade games,
      * not the download's own outcome -- a failure still leaves the user with the standing menu-key
      * combo (Start+Select/F12) to open the OSD by hand. */

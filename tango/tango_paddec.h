@@ -7,7 +7,7 @@
  * Tango. Our own code.
  *
  * pd_eval() is the REFERENCE for sys-tango's tango_pad_decode.v: the RTL unit bench replays vectors generated from it
- * (sys-tango sim/pads/). Change one, change the other, regenerate the vectors.
+ * (sys-tango's tango_pad_decode.v unit bench). Change one, change the other, regenerate the vectors.
  *
  * The RAW WORD (32 bits per pad; bits 0-17 are the DualShock 4 layout of menu-tango docs/TANGO-SPEC.md "Raw word", frozen: every saved
  * .map file and SET_PADMAP pair counts in these bits):

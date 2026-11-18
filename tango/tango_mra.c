@@ -20,9 +20,9 @@ static int ncasecmp(const char *a, const char *b, size_t n)
 }
 
 /* feeds one byte into a match against the literal (case-insensitive); returns 1 once lit is fully
- * matched (and resets *pos for the next search), 0 otherwise. A short, repeat-free literal like "<rbf>"
- * needs no KMP-style fallback table: on a mismatch, *pos restarts at 1 if c happens to restart the
- * literal (c == lit[0]), else 0. */
+ * matched (and resets *pos for the next search), 0 otherwise. A literal whose first character appears
+ * nowhere else in it ("<rbf>", "<!--") needs no KMP-style fallback table: on a mismatch, *pos restarts at
+ * 1 if c happens to restart the literal (c == lit[0]), else 0. */
 static int match_lit(const char *lit, int *pos, char c)
 {
     if (lc((unsigned char)c) == lc((unsigned char)lit[*pos])) {
@@ -34,30 +34,45 @@ static int match_lit(const char *lit, int *pos, char c)
     return 0;
 }
 
+#define MRA_RBF_CHUNK 128   /* bytes per read: the scan's only buffer, on the caller's stack */
+
 int tango_mra_find_rbf(const tango_zipfs_t *io, const char *path, char *rbf, int cap)
 {
     rbf[0] = 0;
     uint32_t size = 0;
     if (!io->open(io->ctx, path, &size)) return 0;
 
-    uint32_t want = size < TANGO_MRA_SCAN_MAX ? size : (uint32_t)TANGO_MRA_SCAN_MAX;
-    uint8_t chunk[128];
-    int open_pos = 0, in_text = 0, out_n = 0, done = 0;
+    /* one pass, one byte at a time; every piece of match state below lives across reads, so a tag or a
+     * comment delimiter split between two reads is matched exactly as if it were in one */
+    enum { RBF_MARKUP, RBF_COMMENT, RBF_TEXT, RBF_DONE } st = RBF_MARKUP;
+    uint8_t chunk[MRA_RBF_CHUNK];
+    int rbf_pos = 0, com_pos = 0, dashes = 0, out_n = 0;
     uint32_t off = 0;
 
-    while (off < want && !done) {
+    while (off < size && st != RBF_DONE) {
         unsigned room = sizeof chunk;
-        if (want - off < room) room = (unsigned)(want - off);
+        if (size - off < room) room = (unsigned)(size - off);
         int n = io->read(io->ctx, off, chunk, room);
         if (n <= 0) break;
-        for (int i = 0; i < n && !done; i++) {
+        for (int i = 0; i < n && st != RBF_DONE; i++) {
             char c = (char)chunk[i];
-            if (!in_text) {
-                if (match_lit("<rbf>", &open_pos, c)) in_text = 1;
-                continue;
+            switch (st) {
+            case RBF_COMMENT:            /* ends at "-->": two or more '-' then '>' (next_tag's rule) */
+                if (c == '-') { dashes++; break; }
+                if (c == '>' && dashes >= 2) st = RBF_MARKUP;
+                dashes = 0;
+                break;
+            case RBF_MARKUP:
+                if (match_lit("<!--", &com_pos, c)) { st = RBF_COMMENT; dashes = 0; rbf_pos = 0; break; }
+                if (match_lit("<rbf>", &rbf_pos, c)) { st = RBF_TEXT; com_pos = 0; }
+                break;
+            case RBF_TEXT:
+                if (c == '<') st = RBF_DONE;                  /* </rbf> or any following tag: text ends here */
+                else if (out_n < cap - 1) rbf[out_n++] = c;
+                break;
+            default:
+                break;
             }
-            if (c == '<') done = 1;                    /* </rbf> or any following tag: text ends here */
-            else if (out_n < cap - 1) rbf[out_n++] = c;
         }
         off += (uint32_t)n;
     }
@@ -340,11 +355,21 @@ static int find_next_top_level(mra_cur_t *cur, uint32_t *pos, uint32_t size, con
 /* ------------------------------------------------------------------ rom_open / rom_read / rom_close */
 static void scan_patches(mra_cur_t *cur, uint32_t from, uint32_t rom_end, tango_mra_rom_t *r);
 
-int tango_mra_rom_open(tango_mra_rom_t *r, const tango_zipfs_t *mra_io, const char *mra_path,
-                       int want_index, char *out_zip, int zip_name_cap)
+/* A <rom>'s index="": atoi, as mra_loader.cpp's xml_send_rom reads it; a <rom> without one is index 0 there
+ * (arc_info->romindex is reset to 0 at every <rom> start tag). */
+static int rom_tag_index(mra_cur_t *cur, const mra_tag_t *t)
+{
+    char idxbuf[16];
+    return tag_attr(cur, t, "index", idxbuf, sizeof idxbuf) ? atoi(idxbuf) : 0;
+}
+
+/* The shared body of tango_mra_rom_open and tango_mra_rom_open_nth: by_ordinal = 0 takes the first top-level
+ * <rom> whose index is `want`, by_ordinal = 1 the want-th top-level <rom> of the file (0-based, any index). */
+static int rom_open(tango_mra_rom_t *r, const tango_zipfs_t *mra_io, const char *mra_path,
+                    int by_ordinal, int want, char *out_zip, int zip_name_cap)
 {
     memset(r, 0, sizeof *r);
-    r->want_index = want_index;
+    r->want_index = by_ordinal ? -1 : want;
     r->zip_mem_open_slot = -1;
     if (out_zip && zip_name_cap > 0) out_zip[0] = 0;
 
@@ -355,14 +380,18 @@ int tango_mra_rom_open(tango_mra_rom_t *r, const tango_zipfs_t *mra_io, const ch
     mra_cur_t cur; cur_init(&cur, mra_io, size);
     mra_tag_t t;
     uint32_t pos = 0;
+    int ordinal = 0;
     while (find_next_top_level(&cur, &pos, size, "rom", &t)) {
-        char idxbuf[16];
-        if (!tag_attr(&cur, &t, "index", idxbuf, sizeof idxbuf) || atoi(idxbuf) != want_index) {
+        int idx = rom_tag_index(&cur, &t);
+        int match = by_ordinal ? (ordinal == want) : (idx == want);
+        ordinal++;
+        if (!match) {
             if (!t.self_close) pos = skip_to_close(&cur, t.after, size, "rom");   /* never look inside a
                                                                                    * non-matching <rom> */
             continue;
         }
         r->found = 1;
+        r->index = idx;
         if (out_zip) tag_attr(&cur, &t, "zip", out_zip, zip_name_cap);
         tag_attr(&cur, &t, "md5", r->expected_md5, sizeof r->expected_md5);
         tango_md5_init(&r->md5_ctx);
@@ -372,9 +401,21 @@ int tango_mra_rom_open(tango_mra_rom_t *r, const tango_zipfs_t *mra_io, const ch
         r->pos = t.after;
         return 1;
     }
-    r->phase = TANGO_MRA_ROM_DONE;   /* no <rom index="want_index"> at all: the same "nothing to send"
-                                      * as an empty one (MiSTer: romlen[0] stays 0 either way) */
+    r->phase = TANGO_MRA_ROM_DONE;   /* no such <rom> at all: the same "nothing to send" as an empty one
+                                      * (MiSTer: romlen[0] stays 0 either way) */
     return 1;
+}
+
+int tango_mra_rom_open(tango_mra_rom_t *r, const tango_zipfs_t *mra_io, const char *mra_path,
+                       int want_index, char *out_zip, int zip_name_cap)
+{
+    return rom_open(r, mra_io, mra_path, 0, want_index, out_zip, zip_name_cap);
+}
+
+int tango_mra_rom_open_nth(tango_mra_rom_t *r, const tango_zipfs_t *mra_io, const char *mra_path,
+                           int nth, char *out_zip, int zip_name_cap)
+{
+    return rom_open(r, mra_io, mra_path, 1, nth, out_zip, zip_name_cap);
 }
 
 /* Tries each zips[0..n_zips) in order (MiSTer's own per-part fallback trial, mra_loader.cpp 853-879)
@@ -546,21 +587,25 @@ static int tango_mra_rom_read_inner(tango_mra_rom_t *r, const tango_zipfs_t *mra
             r->part_crc = tag_attr(&cur, &t, "crc", numbuf, sizeof numbuf) ? (uint32_t)strtoul(numbuf, NULL, 16) : 0;
             r->part_offset = tag_attr(&cur, &t, "offset", numbuf, sizeof numbuf) ? (uint32_t)strtoul(numbuf, NULL, 0) : 0;
             r->part_length = tag_attr(&cur, &t, "length", numbuf, sizeof numbuf) ? (uint32_t)strtoul(numbuf, NULL, 0) : 0;
-            r->repeat_left = tag_attr(&cur, &t, "repeat", numbuf, sizeof numbuf) ? atoi(numbuf) : 1;
-            if (r->repeat_left < 1) r->repeat_left = 1;
+            /* repeat="": strtoul base 0 as mra_loader.cpp (so "0x1800" is 6144); its part loop runs `repeat`
+             * times, so 0 (or a value that does not parse) contributes nothing */
+            unsigned long rep = tag_attr(&cur, &t, "repeat", numbuf, sizeof numbuf) ? strtoul(numbuf, NULL, 0) : 1;
+            r->repeat_left = rep > 0x7FFFFFFFul ? 0 : (int)rep;
 
             if (r->part_name[0]) {
-                r->phase = TANGO_MRA_ROM_PART_FILE;
                 /* a file-based part's body is otherwise empty (no inline text matters once name is
                  * given) -- but a non-self-closing one still has its own "</part>" to skip past before
                  * the next SEEK_PART scan resumes, or it would mistake that close tag for the rom's own */
                 r->part_close_after = t.self_close ? t.after : skip_to_close(&cur, t.after, r->mra_size, "part");
+                if (!r->repeat_left) { r->pos = r->part_close_after; break; }
+                r->phase = TANGO_MRA_ROM_PART_FILE;
             } else if (t.self_close) {
                 continue;   /* a self-closing, nameless part: zero bytes, nothing to do -- next part */
             } else {
+                r->part_close_after = skip_to_close_at(&cur, t.after, r->mra_size, "part", &r->inline_end);
+                if (!r->repeat_left) { r->pos = r->part_close_after; break; }
                 r->phase = TANGO_MRA_ROM_PART_INLINE;
                 r->inline_start = t.after;      /* the hex text starts right after '>' */
-                r->part_close_after = skip_to_close_at(&cur, t.after, r->mra_size, "part", &r->inline_end);
                 r->pos = r->inline_start;
                 r->hex_have_nibble = 0;
             }
@@ -667,6 +712,128 @@ void tango_mra_rom_close(tango_mra_rom_t *r, const tango_zipfs_t *mra_io,
         r->zip_mem_open_slot = -1;
     }
     mra_io->close(mra_io->ctx);
+}
+
+/* ================================================================== every <rom>, in document order */
+
+static int md5_declared(const tango_mra_rom_t *r)
+{
+    return r->expected_md5[0] && ncasecmp(r->expected_md5, "none", 5) != 0;
+}
+
+static void seq_close_zips(tango_mra_seq_t *q)
+{
+    if (q->n_zips && q->zcb.close) q->zcb.close(q->zcb.ctx, q->zips, q->zip_ios, q->n_zips);
+    q->n_zips = 0;
+}
+
+static void seq_open_zips(tango_mra_seq_t *q, const char *zip_list)
+{
+    q->n_zips = 0;
+    if (zip_list[0] && q->zcb.open) q->n_zips = q->zcb.open(q->zcb.ctx, zip_list, q->zips, q->zip_ios);
+    if (q->n_zips < 0) q->n_zips = 0;
+    if (q->n_zips > TANGO_MRA_MAX_ZIPS) q->n_zips = TANGO_MRA_MAX_ZIPS;
+}
+
+int tango_mra_seq_plan(tango_mra_seq_t *q, const tango_zipfs_t *mra_io, const char *mra_path,
+                       const tango_mra_zips_t *zcb, uint8_t *scratch, unsigned scratch_len,
+                       tango_mra_seq_note_fn note, void *note_ctx)
+{
+    memset(q, 0, sizeof *q);
+    q->mra_io = mra_io; q->mra_path = mra_path; q->cur = -1;
+    if (zcb) q->zcb = *zcb;
+    int validrom0 = 0, sends = 0;
+    for (int ord = 0; ; ord++) {
+        char zl[TANGO_MRA_ZIP_NAME_MAX];
+        if (!tango_mra_rom_open_nth(&q->rom, mra_io, mra_path, ord, zl, sizeof zl)) return ord ? sends : -1;
+        if (!q->rom.found) { mra_io->close(mra_io->ctx); break; }
+        tango_mra_seq_rom_t e = { 0 };
+        e.ordinal = (uint8_t)ord;
+        e.index = (uint8_t)q->rom.index;            /* rom_start(unsigned char index) */
+        if (q->n >= TANGO_MRA_SEQ_MAX) {
+            mra_io->close(mra_io->ctx);
+            e.status = TANGO_MRA_SEQ_OVER_CAP;
+            if (note) note(note_ctx, &e, &q->rom);
+            break;
+        }
+        if (q->rom.index == 0 && validrom0) {
+            /* xml_send_rom's </part>: a later rom 0 adds no data once an earlier one matched its md5, and
+             * rom_finish sends nothing for an empty rom */
+            mra_io->close(mra_io->ctx);
+            e.status = TANGO_MRA_SEQ_SUPPRESSED;
+        } else {
+            int has_zip = zl[0] != 0;
+            seq_open_zips(q, zl);
+            uint32_t total = 0; int got;
+            for (;;) {
+                got = tango_mra_rom_read(&q->rom, mra_io, q->zips, q->zip_ios, q->n_zips, scratch, scratch_len);
+                if (got <= 0) break;
+                total += (uint32_t)got;
+            }
+            tango_mra_rom_close(&q->rom, mra_io, q->zips, q->zip_ios);
+            seq_close_zips(q);
+            /* xml_send_rom's </rom>: checksumsame = !strlen(zipname) || md5 match -- a rom with no zip=""
+             * is sent whatever its md5 says */
+            if (got == TANGO_MRA_MD5_MISMATCH && !has_zip) { got = 0; e.no_md5_check = 1; }
+            if (got < 0) e.status = (int8_t)got;
+            else if (!total) e.status = TANGO_MRA_SEQ_EMPTY;   /* rom_finish: no data, nothing sent */
+            else {
+                e.status = TANGO_MRA_SEQ_SEND; e.size = total; sends++;
+                if (q->rom.index == 0 && md5_declared(&q->rom)) validrom0 = 1;
+            }
+        }
+        q->plan[q->n++] = e;
+        if (note) note(note_ctx, &e, &q->rom);
+    }
+    return sends;
+}
+
+int tango_mra_seq_next(tango_mra_seq_t *q)
+{
+    tango_mra_seq_close(q);
+    for (q->cur++; q->cur < q->n; q->cur++) {
+        tango_mra_seq_rom_t *e = &q->plan[q->cur];
+        if (e->status != TANGO_MRA_SEQ_SEND) continue;
+        char zl[TANGO_MRA_ZIP_NAME_MAX];
+        if (!tango_mra_rom_open_nth(&q->rom, q->mra_io, q->mra_path, e->ordinal, zl, sizeof zl)) {
+            e->status = -1; continue;
+        }
+        if (!q->rom.found) { q->mra_io->close(q->mra_io->ctx); e->status = -1; continue; }
+        if (e->no_md5_check) q->rom.expected_md5[0] = 0;
+        seq_open_zips(q, zl);
+        q->rom_open = 1;
+        return 1;
+    }
+    return 0;
+}
+
+int tango_mra_seq_read(void *ctx, uint8_t *buf, unsigned n)
+{
+    tango_mra_seq_t *q = ctx;
+    if (!q->rom_open) return -1;
+    return tango_mra_rom_read(&q->rom, q->mra_io, q->zips, q->zip_ios, q->n_zips, buf, n);
+}
+
+void tango_mra_seq_close(tango_mra_seq_t *q)
+{
+    if (!q->rom_open) return;
+    tango_mra_rom_close(&q->rom, q->mra_io, q->zips, q->zip_ios);
+    seq_close_zips(q);
+    q->rom_open = 0;
+}
+
+int tango_mra_seq_has_data(const tango_mra_seq_t *q, uint8_t index)
+{
+    for (int i = 0; i < q->n; i++)
+        if (q->plan[i].index == index && q->plan[i].status == TANGO_MRA_SEQ_SEND) return 1;
+    return 0;
+}
+
+int tango_mra_bytes_uniform(const uint8_t *p, uint32_t n)
+{
+    if (!n) return 0;
+    for (uint32_t i = 1; i < n; i++) if (p[i] != p[0]) return 0;
+    return 1;
 }
 
 /* ================================================================== <switches>/<cheats> (DIPs) */
@@ -938,8 +1105,9 @@ int tango_mra_misc_parse(const tango_zipfs_t *mra_io, const char *mra_path, tang
         } else if (!strcmp(t.name, "nvram")) {
             out->has_nvram = 1;
             char valbuf[16];
-            out->nvram_index = tag_attr(&cur, &t, "index", valbuf, sizeof valbuf) ? atoi(valbuf) : 0;
-            out->nvram_size = tag_attr(&cur, &t, "size", valbuf, sizeof valbuf) ? atoi(valbuf) : 0;
+            /* strtoul base 0, as mra_loader.cpp reads both (nvram_idx/nvram_size) */
+            out->nvram_index = tag_attr(&cur, &t, "index", valbuf, sizeof valbuf) ? (int)strtoul(valbuf, NULL, 0) : 0;
+            out->nvram_size = tag_attr(&cur, &t, "size", valbuf, sizeof valbuf) ? (int)strtoul(valbuf, NULL, 0) : 0;
         }
         if (!t.self_close) pos = skip_to_close(&cur, t.after, size, t.name);   /* every top-level tag's
             * own close -- including <buttons>/<nvram> themselves once their attributes are already

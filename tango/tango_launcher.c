@@ -341,6 +341,20 @@ void tango_launcher_message(tango_launcher_t *L, const char *key, const char *te
     tango_launcher_redraw(L);
 }
 
+void tango_load_fail_text(char *out, int cap, const char *what, int res, const uint32_t st[3], const char *rbf)
+{
+    size_t n = (size_t)cap;
+    if (res == TANGO_LOAD_NOT_FOUND) {
+        if (rbf && rbf[0]) snprintf(out, n, "%s: core %s not found in _Arcade/cores", what, rbf);
+        else if (rbf)      snprintf(out, n, "%s: no rbf found", what);
+        else               snprintf(out, n, "%s: core not found", what);
+    } else if (res == TANGO_LOAD_NOT_DONE)
+        snprintf(out, n, "%s: not DONE  R %08lx E %08lx W %08lx", what,
+                 (unsigned long)st[1], (unsigned long)st[2], (unsigned long)st[0]);
+    else
+        snprintf(out, n, "%s: upload failed  R %08lx E %08lx", what, (unsigned long)st[1], (unsigned long)st[2]);
+}
+
 static int load(tango_launcher_t *L, const tango_dirent_t *e, int via_restart)
 {
     char msg[TANGO_PATH_MAX];
