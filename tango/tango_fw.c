@@ -1489,6 +1489,25 @@ static void arc_setup(void)
     }
 }
 
+/* Reset across an .mra load (MiSTer user_io.cpp: status[0] is set at 1614, arcade_send_rom() at 1641 sends
+ * the ROMs and ends with arcade_sw_send(), the DIP index 254, and status[0] is released only at 1775). An
+ * arcade core whose reset has no download term for index 254 reads its DIP switches as it leaves reset, so
+ * the reset must stay on until the DIP, cheat and NVRAM sends are done. tango_core_init() pulses status[0]
+ * before the .mra load starts; core_task() sets it again just before mra_autostart(), and
+ * arc_setup_release() clears it after arc_setup() returns, on every one of arc_setup()'s paths. */
+static void arc_reset_hold(int on)
+{
+    if (on) CM.status[0] |= 1; else CM.status[0] &= (uint8_t)~1;
+    tango_core_send_status(&CM);
+}
+
+static void arc_setup_release(void)
+{
+    arc_setup();
+    arc_reset_hold(0);
+    tango_debugf("arcade: reset released after the DIP/cheat/NVRAM sends");
+}
+
 /* Save-timing policy: DIP/cheat are saved (only
  * if changed, mirroring arcade_sw_save's own "dip_saved != dip_cur" guard) and NVRAM is pulled back from the
  * core and saved, at exactly the SAME two points tango_fw.c's own status-word save already uses --
@@ -1583,7 +1602,7 @@ static void dl_close(void)
          * only ever true if it did) has now fully closed; this is the one safe moment to send DIP/cheat/
          * NVRAM at their own new indices, reusing the SAME now-idle download mechanism (arc_pending_setup's
          * own comment explains why it cannot happen any earlier). */
-        if (arc_pending_setup) { arc_pending_setup = false; arc_setup(); }
+        if (arc_pending_setup) { arc_pending_setup = false; arc_setup_release(); }
     }
 }
 
@@ -2272,6 +2291,7 @@ static void core_task(void *p)
         if ((int)blen >= cap) blen = (size_t)cap - 1;
         memcpy(dst, base, blen); dst[blen] = 0;
         arc_pending_setup = true;
+        arc_reset_hold(1);                         /* released by arc_setup_release() */
         mra_autostart(arc_mra_path);
         mra_pending[0] = 0;
         /* no ROM auto-download ever started (refused/empty/not found/no <rom> with data): dl_is_mra never
@@ -2279,7 +2299,7 @@ static void core_task(void *p)
          * synchronously, right now (DL is guaranteed idle: nothing above ever opened it). If one DID
          * start, dl_is_mra is true here and this is deliberately skipped -- dl_close() picks it up once
          * the last <rom>'s own SELECT(0) is actually on the wire (see arc_pending_setup's own comment). */
-        if (arc_pending_setup && !dl_is_mra) { arc_pending_setup = false; arc_setup(); }
+        if (arc_pending_setup && !dl_is_mra) { arc_pending_setup = false; arc_setup_release(); }
         /* vp_pending's own counterpart to the vp_start() skipped above: if the ROM download genuinely
          * started, defer to dl_close(); otherwise (refused/empty/not found/no <rom> with data, or
          * mra_autostart() itself never even opened), there is nothing to wait for -- call it now, the
