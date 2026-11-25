@@ -6,7 +6,7 @@
 
   uses the BL616 SDH SD Host controller (SDH) to access the card or read from an USB Mass Storage (MSC).
 
-  Modified for Tango, 2026: sdc_direct_card_idle(). Apache-2.0 as the original.
+  Modified for Tango, 2026: sdc_direct_card_idle(), TANGO_USB_CARD. Apache-2.0 as the original.
 */
 
 #include "bflb_gpio.h"
@@ -18,6 +18,11 @@ static struct bflb_device_s *gpio;
 static bool sdc_direct_active = false;
 
 bool sdc_direct_init(void) {  
+#ifdef TANGO_USB_CARD
+  /* Tango USB card mode: the "sd" volume is the USB drive (mcu_hw_usb_card_attach) */
+  sdc_direct_active = mcu_hw_usb_card_attach(10000);
+  return sdc_direct_active;
+#endif
   gpio = bflb_device_get_by_name("gpio");
 
 #ifdef TANG_CONSOLE
@@ -46,6 +51,9 @@ int sdh_sd_go_idle(struct sd_card_s *sd_card, uint32_t arg);   // bsp/common/sdh
 // so the card is initialised again first (a mount = MMC_disk_initialize: sdh_sd_deinit + sdh_sd_card_init),
 // then CMD0 GO_IDLE_STATE. The Console has no card power switch (only GPIO16 TF_SDIO_SEL, mcu_hw.c pin table).
 void sdc_direct_card_idle(void) {
+#ifdef TANGO_USB_CARD
+  return;                                     /* USB card mode: the SD slot is not used */
+#endif
   static FATFS fs;
   bool mounted = f_mount(&fs, "/sd", 1) == FR_OK;
   if (mounted) f_mount(NULL, "/sd", 1);
@@ -57,6 +65,9 @@ void sdc_direct_card_idle(void) {
 void sdc_direct_release(void) {
   gpio = bflb_device_get_by_name("gpio");
   sdc_direct_active = false;
+#ifdef TANGO_USB_CARD
+  return;                                     /* USB card mode: the TF mux stays with the FPGA */
+#endif
 #ifdef TANG_CONSOLE
   /* Console 60k/138k SD Card bus back to FPGA TF_SDIO_SEL*/
   bflb_gpio_reset(gpio, PIN_TF_SDIO_SEL);
