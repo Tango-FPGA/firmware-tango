@@ -75,7 +75,8 @@ imported at ccb06d2; companion/UPSTREAM.md), Apache License 2.0 (companion/LICEN
 own). Its files keep that licence and their notices. The upstream files Tango changed say so in
 their headers ("Modified for Tango, 2026 ... Apache-2.0 as the original"): src/at_wifi.c,
 src/bl616/CMakeLists.txt, src/bl616/mcu_hw.c, src/bl616/sdc_direct.c, src/bl616/sdc_direct.h,
-src/gowin.c, src/gowin.h, src/hid.c, src/main.c, src/mcu_hw.h, src/menu.c, src/sysctrl.c.
+src/gowin.c, src/gowin.h, src/hid.c, src/main.c, src/mcu_hw.h, src/menu.c, src/sdc.c,
+src/sysctrl.c.
 Apache-2.0 code may be included in a GPL-3.0 work; the combined firmware is distributed under
 GPL-3.0-or-later.
 

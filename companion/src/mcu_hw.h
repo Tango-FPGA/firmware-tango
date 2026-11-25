@@ -39,6 +39,9 @@ int mcu_hw_upload_core_result(const char *name);
 // Tango (BL616): GPIO28/V14 high = UART idle, for a core without the link (see mcu_hw.c)
 void mcu_hw_jtagsel_idle_high(void);
 bool mcu_hw_usb_msc_present(void);
+#ifdef TANGO_USB_CARD
+bool mcu_hw_usb_card_attach(uint32_t wait_ms);   // Tango: USB drive as the "sd" volume
+#endif
 
 // received a byte via the io port (e.g. rs232 from core)
 void mcu_hw_port_byte(unsigned char);

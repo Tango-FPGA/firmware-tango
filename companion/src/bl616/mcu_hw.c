@@ -2704,6 +2704,39 @@ void mcu_hw_jtagsel_idle_high(void) {
 }
 #endif
 
+#ifdef TANGO_USB_CARD
+/* Tango, USB card mode (TANGO_USB_CARD): boards whose BL616 cannot reach the SD slot (Tang Console
+ * PCB 32001: the TF_SDIO_SEL mux does not hand the card to the BL616) use a USB drive on the MCU USB-C
+ * port instead. The drive is registered as FatFs' "sd" volume (DEV_SD), so every /sd/... path of the
+ * firmware reads and writes the USB drive. Waits up to wait_ms for the drive to enumerate. */
+#include "diskio.h"
+extern int USB_disk_status(void);
+extern int USB_disk_initialize(void);
+extern int USB_disk_read(BYTE *buff, LBA_t sector, UINT count);
+extern int USB_disk_write(const BYTE *buff, LBA_t sector, UINT count);
+extern int USB_disk_ioctl(BYTE cmd, void *buff);
+extern DSTATUS USB_Translate_Result_Code(int result);
+
+bool mcu_hw_usb_card_attach(uint32_t wait_ms) {
+  uint64_t t0 = bflb_mtimer_get_time_ms();
+  while (!usb_msc_mounted && bflb_mtimer_get_time_ms() - t0 < wait_ms)
+    vTaskDelay(pdMS_TO_TICKS(100));
+  if (!usb_msc_mounted) {
+    sdc_debugf("USB card mode: no USB drive after %lu ms", (unsigned long)wait_ms);
+    return false;
+  }
+  FATFS_DiskioDriverTypeDef d = { NULL };
+  d.disk_status = USB_disk_status;
+  d.disk_initialize = USB_disk_initialize;
+  d.disk_write = USB_disk_write;
+  d.disk_read = USB_disk_read;
+  d.disk_ioctl = USB_disk_ioctl;
+  d.error_code_parsing = USB_Translate_Result_Code;
+  disk_driver_callback_init(DEV_SD, &d);
+  return true;
+}
+#endif
+
 bool mcu_hw_usb_msc_present(void) {
   return usb_msc_mounted;
 }

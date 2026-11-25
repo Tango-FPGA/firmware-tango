@@ -1,6 +1,7 @@
 //
 // sdc.c - sd card access 
 //
+// Modified for Tango, 2026: TANGO_USB_CARD in fs_init(). Apache-2.0 as the original.
 //
 
 
@@ -289,6 +290,22 @@ static int fs_init() {
   memset(fil, 0, sizeof(FIL)*(MAX_DRIVES+MAX_IMAGES+MAX_CORES));
   memset(lktbl, 0, sizeof(DWORD*)*MAX_DRIVES);
   
+#if defined(DEV_SD) && defined(TANGO_USB_CARD)
+  /* Tango USB card mode: no SD card through the FPGA; the "sd" volume is the USB drive */
+  if (!mcu_hw_usb_card_attach(10000)) {
+    sys_set_rgb(0x400000);  // red, failed
+    return -1;
+  }
+  res_msc = f_mount(&fs, CARD_MOUNTPOINT, 1);
+  if (res_msc != FR_OK) {
+    sdc_debugf("USB card mode: mount fail,res:%d", res_msc);
+    sys_set_rgb(0x400000);
+    return -1;
+  }
+  sdc_debugf("USB card mode: USB drive mounted as %s", CARD_MOUNTPOINT);
+  sys_set_rgb(0x004000);  // green, ok
+  return 0;
+#endif
 #ifdef DEV_SD
   FATFS_DiskioDriverTypeDef MSC_DiskioDriver = { NULL };
   MSC_DiskioDriver.disk_status = sdc_status;

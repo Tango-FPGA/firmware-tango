@@ -81,6 +81,23 @@ Edge (see [Installing](#installing)).
 **Sipeed Tang Console 138K.** The release image is built for it (`./build.sh console138k`). `build.sh` also accepts
 upstream's `console60k` and `primer25k` board names, but the Tango gateware exists for the Console 138K only.
 
+### PCB revision 32001: a USB drive instead of the SD slot
+
+On the first Console boards, **PCB 32001** (printed next to the SD slot on the underside), the BL616 cannot read
+the SD slot: switching the TF mux (`TF_SDIO_SEL`) does not hand the card to the BL616, so the launcher is never
+loaded and the FPGA keeps the image it booted from its own flash. A build with **`TANGO_USB_CARD=1`** in the
+environment (`TANGO_USB_CARD=1 ./build.sh console138k`) uses a **USB drive on the MCU USB-C port** instead:
+
+- the drive (a USB stick, or the microSD card in a USB card reader) is registered as FatFs' `sd` volume, so every
+  `/sd/...` path of the firmware (the launcher, cores, `.mra` files, saves, settings) reads and writes the drive;
+  the card's layout is the same ([The SD card](#the-sd-card));
+- at power-on the firmware waits up to 10 s for the drive to enumerate before it loads `/menu.fs` or `/menu.bin`;
+- the SD slot stays with the FPGA (the mux is not switched).
+
+Connect the drive through a USB-C OTG adapter on the MCU port (some adapters work in one plug orientation only) and
+power the board as usual. Flash the image like the release image, with the same FPGA Partner at `0x0`. Tested on
+two PCB 32001 boards with a card reader: the launcher, the console and arcade templates, `.mra` ROM download.
+
 ## Installing
 
 The easiest way: the [Firmware Installer](https://tango-fpga.github.io/flasher-tango/) in Chrome or Edge, with nothing
